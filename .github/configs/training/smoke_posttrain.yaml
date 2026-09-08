@@ -1,0 +1,26 @@
+# @package _global_
+# The smoke's planning posttraining: the Python carla preset with the planning decoder on and the smoke
+# settings; the initial weights come from the yaml pretraining, named on the command line.
+defaults:
+  - /preset: py123d_garage.config.presets.python.training.transfuser:tf_carla_train
+  - _self_
+compile_mode: null
+progress_bar_refresh_rate: 0
+wandb_config:
+  enabled: false
+lightning_trainer_config:
+  devices: 1
+  max_epochs: 2
+  limit_train_batches: 16
+dataloader_config:
+  batch_size: 2
+  num_workers: 0
+startup_num_workers: 1
+policy_config:
+  transfuser_config:
+    backbone_config:
+      image_architecture: resnet18
+      lidar_architecture: resnet18
+    planning_config:
+      use_planning_decoder: true
+initial_weights_strict: false

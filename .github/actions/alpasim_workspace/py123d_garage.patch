@@ -1,0 +1,114 @@
+Alpasim image build on the Scaleway cluster. Apply from the repo root:
+    git -C py123d_garage/lib/alpasim/alpasim apply "$PWD/py123d_garage/.github/actions/alpasim_workspace/py123d_garage.patch"
+
+Dockerfile: the CUDA base image from the NGC mirror, since Docker Hub resets
+    connections from the compute nodes. Same image, same digest.
+.dockerignore: copy uv.lock into the build context, so the image gets the versions
+    setup_alpasim.sh resolved on the host instead of re-resolving the whole
+    workspace, which needs GitHub. Upstream gitignores the lock, so it is per checkout.
+Dockerfile: git protocol v1 inside the image, since v2 fetches fail on the cluster
+    with "expected flush after ref listing".
+Dockerfile: install every core package except alpasim_driver. The garage driver
+    runs on the host, and the driver member is the only one installed from GitHub,
+    which refuses anonymous fetches from the compute nodes.
+src/controller/pyproject.toml: casadi<3.8. Not cluster specific: casadi 3.8.0
+    dropped the casadi.tools re-exports do_mpc 5.1.1 imports, so the controller
+    dies at import with any fresh resolution.
+src/wizard/alpasim_wizard/services.py: no check of the docker GPU ids against
+    nvidia-smi. Inside a Slurm job nvidia-smi only lists the allocated GPUs, while
+    docker addresses GPUs by host index, so services.*.gpus=[<host index>] is
+    right and the check rejected it.
+
+diff --git a/.dockerignore b/.dockerignore
+index 3438482..7b3c4ac 100644
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -23,6 +23,7 @@
+ !e2e_challenge/starter_kit/
+ !e2e_challenge/starter_kit/**
+ !pyproject.toml
++!uv.lock
+
+ # Exclude specific runtime directories/files we don't need
+ src/runtime/build.env
+diff --git a/Dockerfile b/Dockerfile
+index fd39884..ce8bab1 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -8,7 +8,7 @@
+ #   x86_64  -> nvidia/cuda base
+ #   aarch64 -> NGC PyTorch base (only CUDA-enabled PyTorch source on ARM)
+
+-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 AS base-amd64
++FROM nvcr.io/nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 AS base-amd64
+ FROM nvcr.io/nvidia/pytorch:25.08-py3 AS base-arm64
+ ARG TARGETARCH
+ FROM base-${TARGETARCH}
+@@ -26,6 +26,10 @@ RUN apt-get update && apt-get install -y \
+     libgl1 \
+     && rm -rf /var/lib/apt/lists/*
+
++# Protocol v2 fetches from GitHub fail on the cluster with "expected flush after
++# ref listing"; v1 does not.
++RUN git config --global protocol.version 1
++
+ # gsplat builds CUDA extensions at runtime. Pin the host compiler to a CUDA-compatible
+ # toolchain and use ninja when torch compiles the extension.
+ ENV CC=/usr/bin/gcc-11
+@@ -50,9 +54,11 @@ RUN uv run compile-protos --no-sync
+
+ WORKDIR /repo
+
++# Every core package except the driver: the garage driver runs on the host, and the
++# driver member is the only one that installs from GitHub.
+ RUN --mount=type=secret,id=netrc,target=/root/.netrc \
+     --mount=type=cache,target=/root/.cache/uv \
+-    sh -c 'if [ -f /root/.netrc ]; then export NETRC=/root/.netrc; fi && uv sync --extra all --extra mtgs'
++    sh -c 'if [ -f /root/.netrc ]; then export NETRC=/root/.netrc; fi && uv sync --extra plugins --extra controller --extra eval --extra grpc --extra runtime --extra utils --extra physics --extra tools --extra wizard --extra mtgs'
+
+ ENV UV_CACHE_DIR=/tmp/uv-cache
+ ENV UV_NO_SYNC=1
+diff --git a/src/controller/pyproject.toml b/src/controller/pyproject.toml
+index fbb5916..da84c80 100644
+--- a/src/controller/pyproject.toml
++++ b/src/controller/pyproject.toml
+@@ -10,6 +10,7 @@ requires-python = ">=3.11,<3.13"
+ dependencies = [
+     "numpy",
+     "do_mpc",
++    "casadi<3.8",  # 3.8.0 dropped the casadi.tools re-exports do_mpc imports
+     "pytest",
+     "matplotlib",
+     "osqp",
+diff --git a/src/wizard/alpasim_wizard/services.py b/src/wizard/alpasim_wizard/services.py
+index 57b936c..2ea70c2 100644
+--- a/src/wizard/alpasim_wizard/services.py
++++ b/src/wizard/alpasim_wizard/services.py
+@@ -280,8 +280,6 @@ def build_container_set(
+         ContainerSet populated with containers for all configured services
+     """
+     cfg = context.cfg
+-    num_gpus = context.get_num_gpus()
+-
+     # Overwrite from config
+     use_address_string = (
+         "localhost"
+@@ -315,18 +313,6 @@ def build_container_set(
+                 f"replicas_per_container must be >= 1, got {replicas_per_container}"
+             )
+
+-        # Validate GPU configuration
+-        if (
+-            service_config.gpus is not None
+-            and len(service_config.gpus) > 0
+-            and num_gpus > 0
+-            and not all(gpu_id < num_gpus for gpu_id in service_config.gpus)
+-        ):
+-            raise RuntimeError(
+-                f"Service {service_name} requested GPUs {service_config.gpus} "
+-                f"but only 0 .. {num_gpus - 1} are available."
+-            )
+-
+         # Determine number of containers
+         # If no GPUs specified, create a single container
+         # Otherwise, create one container per GPU

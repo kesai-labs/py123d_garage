@@ -1,0 +1,17 @@
+name: stage_data_root
+description: >-
+  Links the smoke datasets sync_data cached into a per-run data root and exports
+  it as PY123D_GARAGE_DATA_ROOT. Symlinks, so the run never writes into the cache.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        run_root="$RUNNER_TEMP/data_mini"
+        rm -rf "$run_root"
+        for dataset in "$DATA_MINI_CACHE"/*/; do
+          [ -d "$dataset/123D" ] || continue
+          mkdir -p "$run_root/$(basename "$dataset")"
+          cp -rs "$(realpath "$dataset")/123D" "$run_root/$(basename "$dataset")/123D"
+        done
+        echo "PY123D_GARAGE_DATA_ROOT=$run_root" >> "$GITHUB_ENV"

@@ -1,0 +1,21 @@
+data_root: ${oc.env:PY123D_GARAGE_DATA_ROOT}/nuplan/123D
+garage_scene_filter:
+  split_names:
+  - nuplan_val
+  future_duration_s: 4.0
+  history_duration_s: 0.4
+  timestamp_threshold_s: 1.0
+  min_remaining_route_m: 45.0
+  required_scene_modalities:
+  - ego_state_se3
+  - lidar.lidar_merged@history+initial
+  - camera.pcam_l0@initial
+  - camera.pcam_f0@initial
+  - camera.pcam_r0@initial
+  custom_anchor_filter_fns:
+  - py123d_garage.py123d_help.scene_filters:plausible_ego_motion
+  - py123d_garage.py123d_help.scene_filters:plausible_route
+cache_root: ${oc.env:PY123D_GARAGE_DATA_ROOT}/nuplan/py123d_garage_cache/transfuser_nuplan_val
+served_ego_state_interval_us: 100000
+served_camera_interval_us: 100000
+served_lidar_interval_us: 100000

@@ -1,0 +1,18 @@
+data_root: ${oc.env:PY123D_GARAGE_DATA_ROOT}/physical-ai-av/123D
+garage_scene_filter:
+  split_names:
+  - physical-ai-av_val
+  future_duration_s: 4.0
+  history_duration_s: 0.4
+  timestamp_threshold_s: 2.0
+  min_remaining_route_m: 45.0
+  required_scene_modalities:
+  - ego_state_se3
+  - lidar.lidar_merged@history+initial
+  - camera.ftcam_l0@initial
+  - camera.ftcam_f0@initial
+  - camera.ftcam_r0@initial
+cache_root: ${oc.env:PY123D_GARAGE_DATA_ROOT}/physical-ai-av/py123d_garage_cache/transfuser_physical_ai_av_val
+served_ego_state_interval_us: 100000
+served_camera_interval_us: 100000
+served_lidar_interval_us: 100000

@@ -1,0 +1,41 @@
+# Mirrors config.presets.python.policy.latent_transfuser:ltf_nuplan.
+transfuser_config:
+  trajectory_horizon_us: 4000000
+  trajectory_interval_us: 500000
+  required_target_point_distances_m:
+  - 45.0
+  camera_config:
+    input_cameras:
+      nuplan:
+      - PCAM_L0
+      - PCAM_F0
+      - PCAM_R0
+      carla:
+      - PCAM_L0
+      - PCAM_F0
+      - PCAM_R0
+      physical-ai-av:
+      - FTCAM_L0
+      - FTCAM_F0
+      - FTCAM_R0
+      kesai:
+      - FTCAM_L0
+      - FTCAM_F0
+      - FTCAM_R0
+  lidar_config:
+    bev_min_x_m: 0.0
+    bev_min_y_m: -32.0
+    bev_max_y_m: 32.0
+  backbone_config:
+    latent: true
+  visualization_config:
+    prediction_trajectory_style:
+      color_rgb:
+      - 214
+      - 39
+      - 40
+    ground_truth_trajectory_style:
+      color_rgb:
+      - 44
+      - 160
+      - 44

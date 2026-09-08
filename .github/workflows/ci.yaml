@@ -1,0 +1,76 @@
+name: ci
+on:
+  push:
+    branches: [main, pre-release]
+    paths-ignore:
+      - "**/docs/**"
+      - "**/README.md"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**/docs/**"
+      - "**/README.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install py123d-garage
+        run: |
+          uv venv --python 3.10 "$RUNNER_TEMP/venv"
+          echo "VIRTUAL_ENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          VIRTUAL_ENV="$RUNNER_TEMP/venv" uv pip install -e ".[train]" --group dev
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Check import contracts
+        run: lint-imports
+
+      - name: Test with pytest
+        # Enables the beartype+jaxtyping import hook for all of py123d_garage.*
+        # (see src/py123d_garage/__init__.py).
+        env:
+          PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "true"
+          # Presets resolve dataset paths from this; no data exists in ci.
+          PY123D_GARAGE_DATA_ROOT: "/data"
+        # -m "" also runs the slow-marked unit tests that local runs deselect.
+        run: pytest tests/unit -m "" --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo '<details><summary>Coverage by file</summary>'
+            echo
+            echo '```'
+            coverage report
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"

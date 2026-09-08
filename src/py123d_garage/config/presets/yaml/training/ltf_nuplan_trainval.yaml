@@ -1,0 +1,11 @@
+# @package _global_
+# Mirrors config.presets.python.training.latent_transfuser:ltf_nuplan_trainval; every omitted key keeps its schema default.
+defaults:
+- /policy@policy_config: ltf_nuplan
+- /offline_data_sources/ltf_nuplan@offline_data_sources.nuplan_train: nuplan_train
+- /offline_data_sources/ltf_nuplan@offline_data_sources.nuplan_val: nuplan_val
+- _self_
+lightning_trainer_config:
+  max_epochs: 63
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: norm

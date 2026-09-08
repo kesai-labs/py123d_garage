@@ -1,0 +1,11 @@
+# @package _global_
+# The run dir is Hydra's: hydra.run.dir, or the job's subdir of hydra.sweep.dir in a multirun. Hydra records its
+# composition under <run dir>/hydra; the entry points write their own config.yaml and logging next to it.
+hydra:
+  run:
+    dir: outputs/${now:%Y.%m.%d.%H.%M.%S}
+  sweep:
+    dir: outputs/multirun/${now:%Y.%m.%d.%H.%M.%S}
+  output_subdir: hydra
+  job:
+    chdir: false

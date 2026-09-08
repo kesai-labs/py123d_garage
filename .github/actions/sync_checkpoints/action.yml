@@ -1,0 +1,40 @@
+name: sync_checkpoints
+description: >-
+  Incremental download of the published checkpoints into $HOME/ci-cache of
+  whichever machine the job landed on, and exports CHECKPOINT_CACHE. The flock
+  covers overlapping jobs, so the first job on a machine downloads while the
+  others wait.
+inputs:
+  hf-token:
+    description: Hugging Face token for the private checkpoint repo.
+    required: true
+  revision:
+    description: Commit of kesai-labs/py123d_garage_dev_pretrained_checkpoints to download.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        HF_TOKEN: ${{ inputs.hf-token }}
+        REVISION: ${{ inputs.revision }}
+      run: |
+        if [ -z "$HF_TOKEN" ]; then
+          echo "::error::the hf-token input is empty; the checkpoint repo is private"
+          exit 1
+        fi
+        uv pip install huggingface_hub
+        cache="$HOME/ci-cache/checkpoints/$REVISION"
+        mkdir -p "$cache"
+        (
+          flock 9
+          for _attempt in 1 2 3 4 5; do
+            hf download kesai-labs/py123d_garage_dev_pretrained_checkpoints \
+              --revision "$REVISION" \
+              --local-dir "$cache" --max-workers 4 && exit 0
+            echo "download attempt $_attempt failed (rate limit?), retrying in 90s"
+            sleep 90
+          done
+          exit 1
+        ) 9>"$cache.lock"
+        echo "CHECKPOINT_CACHE=$cache" >> "$GITHUB_ENV"

@@ -1,0 +1,25 @@
+data_root: ${oc.env:PY123D_GARAGE_DATA_ROOT}/lead/123D
+garage_scene_filter:
+  split_names:
+  - normal_view
+  future_duration_s: 2.0
+  history_duration_s: 0.2
+  min_remaining_route_m: 45.0
+  required_scene_modalities:
+  - ego_state_se3
+  - lidar.lidar_top@history+initial
+  - camera.pcam_l0@initial
+  - camera.pcam_f0@initial
+  - camera.pcam_r0@initial
+  - camera_semantic.pcam_l0@initial
+  - camera_semantic.pcam_f0@initial
+  - camera_semantic.pcam_r0@initial
+  - camera_depth.pcam_l0@initial
+  - camera_depth.pcam_f0@initial
+  - camera_depth.pcam_r0@initial
+  custom_anchor_filter_fns:
+  - py123d_garage.py123d_help.scene_filters:has_box_detections
+cache_root: ${oc.env:PY123D_GARAGE_DATA_ROOT}/lead/py123d_garage_cache/transfuser_carla
+served_ego_state_interval_us: 50000
+served_camera_interval_us: 250000
+served_lidar_interval_us: 50000

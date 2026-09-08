@@ -1,0 +1,8 @@
+# The training entry point: the schema, the plan training=<name or module:function> selects, then the command line.
+defaults:
+  - schema/train
+  - training: null
+  - hydra_settings
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+  - _self_

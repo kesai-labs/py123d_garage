@@ -1,0 +1,6 @@
+# @package _global_
+# Mirrors config.presets.python.training.latent_transfuser:ltf_kesai_train; every omitted key keeps its schema default.
+defaults:
+- /policy@policy_config: ltf_kesai
+- /offline_data_sources/ltf_kesai@offline_data_sources.kesai_train: kesai_train
+- _self_

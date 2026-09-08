@@ -1,0 +1,36 @@
+name: python_venv
+description: >-
+  Shared micromamba base env on the self-hosted runner's disk; the flock covers
+  overlapping runs. The per-job venv keeps installs isolated.
+inputs:
+  python-version:
+    description: Python version of the venv.
+    required: false
+    default: "3.10"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PYTHON_VERSION: ${{ inputs.python-version }}
+      run: |
+        _root="$HOME/ci-cache/micromamba"
+        _env="$_root/envs/python${PYTHON_VERSION//./}-pip-uv"
+        mkdir -p "$_root"
+        (
+          flock 9
+          if [ ! -x "$_root/bin/micromamba" ]; then
+            curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+              | tar -xj -C "$_root" bin/micromamba
+          fi
+          if [ ! -d "$_env" ]; then
+            "$_root/bin/micromamba" create -y -p "$_env" -c conda-forge \
+              "python=$PYTHON_VERSION" pip uv
+          fi
+        ) 9>"$_root/.provision-lock"
+        # A job the runner killed can leave a half-deleted temp dir behind.
+        rm -rf "$RUNNER_TEMP/venv"
+        "$_env/bin/uv" venv --python "$_env/bin/python" "$RUNNER_TEMP/venv"
+        cp "$_env/bin/uv" "$RUNNER_TEMP/venv/bin/uv"
+        echo "VIRTUAL_ENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
+        echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"

@@ -1,0 +1,12 @@
+# @package _global_
+
+defaults:
+  - external_static
+  - _self_
+
+wizard:
+  debug_flags:
+    use_localhost: true
+  external_services:
+    driver:
+      - "${oc.env:ALPASIM_DRIVER_HOST,localhost}:${oc.env:ALPASIM_DRIVER_PORT,6789}"

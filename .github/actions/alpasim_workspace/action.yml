@@ -1,0 +1,46 @@
+name: alpasim_workspace
+description: >-
+  One Alpasim checkout with its uv venv per runner under $HOME/ci-cache, linked
+  into lib/alpasim/alpasim of this checkout, with the garage package installed
+  editable from this checkout. The base image is built once per machine under a
+  flock; later runs hit the docker cache.
+inputs:
+  hf-token:
+    description: Hugging Face token with NuRec access, for the scene downloads.
+    required: true
+  garage-dir:
+    description: The py123d_garage checkout, relative to the workspace.
+    required: false
+    default: "."
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        HF_TOKEN: ${{ inputs.hf-token }}
+        GARAGE_DIR: ${{ inputs.garage-dir }}
+      run: |
+        set -euo pipefail
+        garage="$GITHUB_WORKSPACE/$GARAGE_DIR"
+        workspace="$HOME/ci-cache/alpasim/$RUNNER_NAME"
+        mkdir -p "$workspace" "$HOME/ci-cache/alpasim"
+        rm -rf "$garage/lib/alpasim/alpasim"
+        ln -s "$workspace" "$garage/lib/alpasim/alpasim"
+
+        bash "$garage/lib/alpasim/tools/setup_alpasim.sh"
+        patch="$garage/.github/actions/alpasim_workspace/py123d_garage.patch"
+        # casadi 3.8 breaks the controller on any fresh resolution; the rest of the patch is harmless here.
+        # A bare uv sync would prune the garage install again, so the setup script runs once more.
+        if git -C "$workspace" apply --check "$patch" 2>/dev/null; then
+          git -C "$workspace" apply "$patch"
+          bash "$garage/lib/alpasim/tools/setup_alpasim.sh"
+        fi
+
+        (
+          flock 9
+          cd "$workspace"
+          uv run alpasim_wizard deploy=docker_build_only topology=1gpu driver=garage_transfuser driver_source=garage_host \
+            driver.model.checkpoint_path=/dev/null wizard.log_dir="$workspace/build"
+          docker compose -f "$workspace/build/docker-compose.yaml" build
+        ) 9>"$HOME/ci-cache/alpasim/.build-lock"
+        echo "HF_TOKEN=$HF_TOKEN" >> "$GITHUB_ENV"

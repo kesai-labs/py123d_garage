@@ -1,0 +1,23 @@
+# @package _global_
+# The smoke's perception pretraining on the carla mini dataset, composed from the shipped yaml groups.
+defaults:
+  - /policy@policy_config: tf_carla
+  - /offline_data_sources/tf_carla@offline_data_sources.carla: carla
+  - _self_
+compile_mode: null
+progress_bar_refresh_rate: 0
+wandb_config:
+  enabled: false
+lightning_trainer_config:
+  devices: 1
+  max_epochs: 2
+  limit_train_batches: 16
+dataloader_config:
+  batch_size: 2
+  num_workers: 0
+startup_num_workers: 1
+policy_config:
+  transfuser_config:
+    backbone_config:
+      image_architecture: resnet18
+      lidar_architecture: resnet18

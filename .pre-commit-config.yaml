@@ -1,0 +1,120 @@
+exclude: ^lib/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files # prevents giant files from being committed.
+        args: [--maxkb=800]
+      - id: check-case-conflict # checks for files that would conflict in case-insensitive filesystems.
+      - id: check-merge-conflict # checks for files that contain merge conflict strings.
+        args: [--assume-in-merge]
+      - id: check-symlinks # checks for symlinks which do not point to anything.
+      - id: destroyed-symlinks # detects symlinks changed to regular files.
+      - id: detect-private-key # detects the presence of private keys.
+      - id: check-toml # checks toml files for parseable syntax.
+      - id: check-vcs-permalinks # ensures links to vcs websites are permalinks.
+      - id: debug-statements # checks for debugger imports and breakpoint() calls.
+      - id: check-yaml # checks yaml files for parseable syntax.
+      - id: end-of-file-fixer # ensures that a file is either empty, or ends with one newline.
+      - id: fix-byte-order-marker # removes utf-8 byte order marker.
+      - id: mixed-line-ending # replaces or checks mixed line ending.
+      - id: trailing-whitespace # trims trailing whitespace.
+      - id: check-json
+        exclude: /README\.rst$|\.pot?$
+      - id: pretty-format-json
+        exclude: /README\.rst$|\.pot?$|\.ipynb$
+        args: [--no-sort-keys, --autofix]
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+      - id: python-check-blanket-type-ignore
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        # tomli lets codespell read [tool.codespell] from pyproject.toml on 3.10.
+        additional_dependencies: [tomli]
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.2
+    hooks:
+      - id: nbstripout
+
+
+  - repo: https://github.com/efrecon/pre-commit-hook-lxml
+    rev: v0.1.4
+    hooks:
+      - id: format-xml
+
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.17
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-black
+
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: "v2.21.1"
+    hooks:
+      - id: pyproject-fmt
+
+  - repo: https://github.com/asottile/add-trailing-comma
+    rev: v4.0.0
+    hooks:
+    -   id: add-trailing-comma
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=error]
+
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff-format
+        entry: ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: pydoclint
+        name: pydoclint
+        entry: pydoclint --config=pyproject.toml
+        language: system
+        types: [python]
+      - id: forbid-lazy-logging
+        name: Use f-strings in log calls, not lazy % args
+        entry: '\bLOG\.\w+\(\s*"[^"]*%[-.#0-9]*[sdifrxeg]'
+        language: pygrep
+        types: [python]
+      - id: forbid-merge-leftovers
+        name: Forbid merge/rebase leftover files
+        entry: git merge/rebase leftover file committed
+        language: fail
+        files: '\.(orig|rej)$|\.(BACKUP|BASE|LOCAL|REMOTE)\.\d+$'
+      - id: lint-imports
+        name: import-linter
+        entry: lint-imports
+        language: system
+        pass_filenames: false
+        files: ^src/py123d_garage/
+      - id: basedpyright
+        name: basedpyright
+        entry: basedpyright --project . --threads=16
+        language: system
+        # This makes basedpyright more efficient
+        pass_filenames: false
+        types: [python]
+        files: ^(src/py123d_garage|tests)/

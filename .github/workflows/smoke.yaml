@@ -1,0 +1,836 @@
+name: smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, pre-release]
+
+env:
+  # https://huggingface.co/datasets/kesai-labs/py123d_garage_dev_data_mini
+  DATA_MINI_REVISION: 1b760cf4710e2e29248a4071bb077d9295a501eb
+  # https://huggingface.co/kesai-labs/py123d_garage_dev_pretrained_checkpoints
+  CHECKPOINT_REVISION: 0d2984fd8b3ef7dc2a94b81155a37a81814f9c4c
+  # https://huggingface.co/kesai-labs/py123d_garage_pretrained_checkpoints
+  PUBLIC_CHECKPOINT_REVISION: 5516eddafcfa4b622c3df59200e5b189ef328182
+  # https://huggingface.co/datasets/kesai-labs/nuplan
+  PUBLIC_NUPLAN_REVISION: 484d9d14e18fdf712dbc70962997ba2d53617bce
+  MTGS_REVISION: 6b3569897bd9c4f999d8aa856bb4f9e4aaa96c3c
+  PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "true"
+  TORCHINDUCTOR_COMPILE_THREADS: "1"
+  # Load CUDA kernel images on first use; the runners cap host memory.
+  CUDA_MODULE_LOADING: LAZY
+  # Enough frames to cross a batch boundary, few enough to stay a smoke.
+  NUM_SCENES: "8"
+  CARLA_ROOT: /opt/carla/0915
+  # One attempt at one route; the job budget covers three.
+  DRIVE_TIMEOUT_S: "1800"
+  # ControlLoss routes on small towns; a checkpoint that drives passes with margin.
+  CARLA_MIN_SCORE: "80"
+  OVERRIDES: >-
+    compile_mode=null
+    wandb_config.enabled=false
+    progress_bar_refresh_rate=0
+    lightning_trainer_config.devices=1
+    lightning_trainer_config.max_epochs=2
+    lightning_trainer_config.limit_train_batches=16
+    dataloader_config.batch_size=2
+    dataloader_config.num_workers=0
+    startup_num_workers=1
+    policy_config.transfuser_config.backbone_config.image_architecture=resnet18
+    policy_config.transfuser_config.backbone_config.lidar_architecture=resnet18
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke_pdm_scorer:
+    runs-on: self-hosted
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_public_nuplan
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.PUBLIC_NUPLAN_REVISION }}
+
+      - uses: ./.github/actions/stage_public_data_root
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - name: Benchmark PDM-Closed
+        run: pytest tests/smoke/evaluation -m slow -v
+
+
+  smoke_data_readers:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Check data access on every dataset
+        run: pytest tests/smoke/py123d_help/scene_readers -m slow -v --log-cli-level=INFO
+
+  smoke_train_datasets:
+    strategy:
+      fail-fast: false
+      matrix:
+        dataset: [carla, nuplan, physical_ai_av, kesai]
+        model: [transfuser, latent_transfuser]
+    runs-on: self-hosted
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Build the cache
+        run: |
+          bash "scripts/cache/${{ matrix.dataset }}/build_${{ matrix.model }}_cache.sh" \
+            dataloader_config.num_workers=1 build_dense_cache=false
+
+      - name: Pretrain (perception)
+        if: matrix.dataset != 'kesai'
+        run: |
+          out="$RUNNER_TEMP/train/pretrain"
+          bash "scripts/training/${{ matrix.dataset }}/${{ matrix.model }}/pretrain.sh" \
+            $OVERRIDES \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+          test -f "$out/optimizer_0001.pth"
+          test -f "$out/trainer_state_0001.pth"
+
+      - name: Posttrain on the pretrained weights (planning decoder)
+        if: matrix.dataset != 'kesai'
+        run: |
+          out="$RUNNER_TEMP/train/posttrain"
+          bash "scripts/training/${{ matrix.dataset }}/${{ matrix.model }}/posttrain.sh" \
+            $OVERRIDES \
+            initial_weights_file="$RUNNER_TEMP/train/pretrain/model_0001.pth" \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+      - name: Train (planning only)
+        # kesai has no perception labels
+        if: matrix.dataset == 'kesai'
+        run: |
+          out="$RUNNER_TEMP/train/train"
+          bash "scripts/training/kesai/${{ matrix.model }}/train.sh" \
+            $OVERRIDES \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+          test -f "$out/trainer_state_0001.pth"
+
+  smoke_train_resume_compile:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Build the cache
+        run: bash scripts/cache/carla/build_transfuser_cache.sh dataloader_config.num_workers=1 build_dense_cache=false
+
+      - name: Resume a training for one more epoch
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/train/resume"
+          mkdir -p "$out"
+          bash scripts/training/carla/transfuser/pretrain.sh \
+            $OVERRIDES \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+          bash scripts/training/carla/transfuser/pretrain.sh \
+            $OVERRIDES \
+            hydra.run.dir="$out" \
+            resume_from_last_checkpoint=true \
+            lightning_trainer_config.max_epochs=3 2>&1 | tee "$out/resume.log"
+          # A resumed run trains only the third epoch.
+          grep -q "Epoch 3/3" "$out/resume.log"
+          ! grep -q "Epoch 1/3" "$out/resume.log"
+          test -f "$out/model_0002.pth"
+
+      - name: Train compiled
+        run: |
+          out="$RUNNER_TEMP/train/compiled"
+          bash scripts/training/carla/transfuser/pretrain.sh \
+            $OVERRIDES \
+            compile_mode=default \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+  smoke_train_mixture:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Build both mixture caches
+        run: bash scripts/cache/nuplan_physical_ai_av/build_latent_transfuser_cache.sh dataloader_config.num_workers=1 build_dense_cache=false
+
+      - name: Train a weighted mixture of two datasets
+        # A non-1 source weight is the only path onto the WeightedRandomSampler.
+        run: |
+          out="$RUNNER_TEMP/train/mixture"
+          bash scripts/training/nuplan_physical_ai_av/latent_transfuser/pretrain.sh \
+            $OVERRIDES \
+            offline_data_sources.nuplan_train.source_weight=2.0 \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+  smoke_train_live_builders:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Train from the live builders, without a cache store
+        run: |
+          out="$RUNNER_TEMP/train/live"
+          bash scripts/training/carla/transfuser/pretrain.sh \
+            $OVERRIDES \
+            read_from_cache_store=false \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+  smoke_cache_rebuild:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Build the cache, then rebuild incrementally and by force
+        run: |
+          bash scripts/cache/carla/build_transfuser_cache.sh dataloader_config.num_workers=1 build_dense_cache=false
+          # A second build finds everything cached and only reseals the manifest.
+          bash scripts/cache/carla/build_transfuser_cache.sh dataloader_config.num_workers=1 build_dense_cache=false
+          bash scripts/cache/carla/build_transfuser_cache.sh \
+            dataloader_config.num_workers=1 build_dense_cache=false \
+            force_cache_rebuild=true
+
+      - name: Train from the rebuilt store
+        run: |
+          out="$RUNNER_TEMP/train/cached"
+          bash scripts/training/carla/transfuser/pretrain.sh \
+            $OVERRIDES \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+      - name: Train a subset consumer of the full store
+        run: |
+          out="$RUNNER_TEMP/train/subset"
+          bash scripts/training/carla/transfuser/pretrain.sh \
+            $OVERRIDES \
+            policy_config.transfuser_config.bev_semantic_config.use_bev_semantic=false \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+  smoke_hydra_yaml_configs:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    env:
+      PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "false"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      # numba's default threading layer deadlocks in loader workers (lidar ground removal is @njit(parallel=True)).
+      NUMBA_NUM_THREADS: "1"
+      NUMBA_THREADING_LAYER: workqueue
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Build the cache from the yaml plan
+        run: |
+          py123d-garage-cache --config-dir .github/configs \
+            training@plan=smoke_pretrain \
+            dataloader_config.num_workers=1 build_dense_cache=false \
+            hydra.run.dir="$RUNNER_TEMP/yaml/cache"
+          test -f "$RUNNER_TEMP/yaml/cache/config.yaml"
+
+      - name: Pretrain from the yaml plan composed of the shipped policy and source groups
+        run: |
+          out="$RUNNER_TEMP/yaml/pretrain"
+          py123d-garage-training --config-dir .github/configs \
+            training=smoke_pretrain \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+          test -f "$out/hydra/overrides.yaml"
+
+      - name: Posttrain from a yaml plan built on the Python preset, on the yaml-pretrained weights
+        run: |
+          out="$RUNNER_TEMP/yaml/posttrain"
+          py123d-garage-training --config-dir .github/configs \
+            training=smoke_posttrain \
+            initial_weights_file="$RUNNER_TEMP/yaml/pretrain/model_0001.pth" \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+      - name: Score the posttrained checkpoint on a carla slice, replaying its saved config
+        run: |
+          cp "$RUNNER_TEMP/yaml/posttrain/model_0001.pth" "$RUNNER_TEMP/yaml/posttrain/model.pth"
+          bash .github/scripts/eval_slice.sh open_loop \
+            "$RUNNER_TEMP/yaml/posttrain" carla 4 "$RUNNER_TEMP/yaml/open_loop"
+
+  smoke_open_loop_eval:
+    strategy:
+      fail-fast: false
+      matrix:
+        # max_ade_m is about twice each checkpoint's current error.
+        include:
+          - checkpoint: carla_transfuser
+            dataset: carla
+            max_ade_m: 3.0
+          - checkpoint: kesai_latent_transfuser
+            dataset: kesai
+            max_ade_m: 0.5
+          - checkpoint: nuplan_latent_transfuser
+            dataset: nuplan
+            max_ade_m: 0.8
+          - checkpoint: pai_latent_transfuser
+            dataset: physical_ai_av
+            max_ade_m: 1.6
+          # Highway driving; VaVAM's errors are large there.
+          - checkpoint: vavam
+            dataset: physical_ai_av
+            max_ade_m: 40.0
+    runs-on: self-hosted
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - uses: ./.github/actions/sync_checkpoints
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.CHECKPOINT_REVISION }}
+
+      - uses: ./.github/actions/stage_data_root
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - name: Score ${{ matrix.checkpoint }} on ${{ matrix.dataset }}
+        run: |
+          .github/scripts/eval_slice.sh open_loop \
+            "$CHECKPOINT_CACHE/${{ matrix.checkpoint }}" \
+            "${{ matrix.dataset }}" "$NUM_SCENES" \
+            "$RUNNER_TEMP/open_loop/${{ matrix.checkpoint }}" \
+            "${{ matrix.max_ade_m }}"
+
+  smoke_navtest_eval:
+    runs-on: self-hosted
+    timeout-minutes: 45
+    env:
+      CHECKPOINT: nuplan_latent_transfuser
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_public_nuplan
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.PUBLIC_NUPLAN_REVISION }}
+
+      - uses: ./.github/actions/stage_public_data_root
+
+      - uses: ./.github/actions/sync_checkpoints
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.CHECKPOINT_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - name: PDM-score the nuplan policy on navtest frames
+        run: |
+          .github/scripts/eval_slice.sh navsim \
+            "$CHECKPOINT_CACHE/$CHECKPOINT" \
+            navtest "$NUM_SCENES" "$RUNNER_TEMP/navtest"
+
+  # Closed loop needs most of a GPU, so it runs once every job above is finished, passed or not.
+  smoke_release_checkpoint:
+    strategy:
+      fail-fast: false
+      matrix:
+        section: [open_loop_nuplan, open_loop_physical_ai_av, navsim, finetune]
+        checkpoint: [resnet34_v0.1.0]
+        include:
+          - checkpoint: resnet34_v0.1.0
+            weights: model_0014.pth
+            model: latent_transfuser
+            sources: ltf_nuplan
+    runs-on: self-hosted
+    timeout-minutes: 60
+    env:
+      CHECKPOINT_DIR: outputs/checkpoints/${{ matrix.checkpoint }}
+      CHECKPOINT_FILE: outputs/checkpoints/${{ matrix.checkpoint }}/${{ matrix.weights }}
+      # The shared OVERRIDES swap the backbone, which a strict load of the released weights refuses. No cache: every tensor builds live.
+      FINETUNE_OVERRIDES: >-
+        compile_mode=null
+        read_from_cache_store=false
+        wandb_config.enabled=false
+        progress_bar_refresh_rate=0
+        lightning_trainer_config.devices=1
+        lightning_trainer_config.max_epochs=2
+        lightning_trainer_config.limit_train_batches=16
+        dataloader_config.batch_size=2
+        dataloader_config.num_workers=0
+        startup_num_workers=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_data
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          data-mini-revision: ${{ env.DATA_MINI_REVISION }}
+
+      - uses: ./.github/actions/stage_data_root
+        if: matrix.section != 'navsim'
+
+      - uses: ./.github/actions/sync_public_nuplan
+        if: matrix.section == 'navsim'
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.PUBLIC_NUPLAN_REVISION }}
+
+      - uses: ./.github/actions/stage_public_data_root
+        if: matrix.section == 'navsim'
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - name: Download ${{ matrix.checkpoint }} as its README says
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          hf download kesai-labs/py123d_garage_pretrained_checkpoints \
+            --revision "$PUBLIC_CHECKPOINT_REVISION" \
+            --include "${{ matrix.checkpoint }}/*" --local-dir outputs/checkpoints
+          test -f "$CHECKPOINT_FILE"
+          test -f "$CHECKPOINT_DIR/config.yaml"
+          test -f "$CHECKPOINT_DIR/README.md"
+
+      - name: Open loop with ${{ matrix.checkpoint }} on the nuPlan test split
+        if: matrix.section == 'open_loop_nuplan'
+        run: |
+          out="$RUNNER_TEMP/release/${{ matrix.checkpoint }}/open_loop_nuplan"
+          py123d-garage-evaluation-open-loop \
+            hydra.run.dir="$out" \
+            policy_config.evaluation_checkpoint_file="$CHECKPOINT_FILE" \
+            +offline_data_sources/${{ matrix.sources }}@benchmark_offline_data_sources.nuplan_test=nuplan_test \
+            benchmark_offline_data_sources.nuplan_test.cache_root=null \
+            +benchmark_offline_data_sources.nuplan_test.garage_scene_filter.max_num_scenes="$NUM_SCENES" \
+            parallelization_config.device=cuda \
+            parallelization_config.inference_batch_size=2 \
+            parallelization_config.max_workers=1
+          test -s "$out/results.csv"
+          cat "$out/results.csv"
+
+      - name: Open loop with ${{ matrix.checkpoint }} on the Physical AI AV test split, the source swapped
+        if: matrix.section == 'open_loop_physical_ai_av'
+        run: |
+          out="$RUNNER_TEMP/release/${{ matrix.checkpoint }}/open_loop_physical_ai_av"
+          py123d-garage-evaluation-open-loop \
+            hydra.run.dir="$out" \
+            policy_config.evaluation_checkpoint_file="$CHECKPOINT_FILE" \
+            +offline_data_sources/${{ matrix.sources }}@benchmark_offline_data_sources.physical_ai_av_test=physical_ai_av_test \
+            benchmark_offline_data_sources.physical_ai_av_test.cache_root=null \
+            +benchmark_offline_data_sources.physical_ai_av_test.garage_scene_filter.max_num_scenes="$NUM_SCENES" \
+            parallelization_config.device=cuda \
+            parallelization_config.inference_batch_size=2 \
+            parallelization_config.max_workers=1
+          test -s "$out/results.csv"
+          cat "$out/results.csv"
+
+      - name: NAVSIM script with ${{ matrix.checkpoint }} on navtest frames
+        if: matrix.section == 'navsim'
+        run: |
+          out="$RUNNER_TEMP/release/${{ matrix.checkpoint }}/navsim"
+          # The published navtest export runs at 2 Hz; the slice override carries that and the scene cap.
+          source_override="$(python .github/scripts/eval_source.py "$CHECKPOINT_FILE" navtest "$NUM_SCENES")"
+          CHECKPOINT_FILE="$CHECKPOINT_FILE" "scripts/evaluation/navsim/${{ matrix.model }}.sh" \
+            hydra.run.dir="$out" \
+            parallelization_config.inference_batch_size=2 \
+            parallelization_config.max_workers=1 \
+            "$source_override"
+          test -s "$out/results.csv"
+          cat "$out/results.csv"
+
+      - name: Finetune with a strict load of the ${{ matrix.checkpoint }} weights
+        if: matrix.section == 'finetune'
+        run: |
+          out="$RUNNER_TEMP/release/${{ matrix.checkpoint }}/finetune"
+          bash "scripts/training/nuplan/${{ matrix.model }}/posttrain.sh" \
+            $FINETUNE_OVERRIDES \
+            initial_weights_file="$CHECKPOINT_FILE" \
+            initial_weights_strict=true \
+            hydra.run.dir="$out"
+          test -f "$out/model_0001.pth"
+
+  # A fixed slice of the public nuPlan release, downloaded as the data docs say, then read and filtered.
+  smoke_release_dataset:
+    runs-on: self-hosted
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train]" --group dev
+
+      - uses: ./.github/actions/sync_public_nuplan
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.PUBLIC_NUPLAN_REVISION }}
+
+      - uses: ./.github/actions/stage_public_data_root
+
+      - name: Read and filter the logs
+        run: pytest tests/smoke/py123d_help/scene_readers -m slow -v --log-cli-level=INFO
+
+  smoke_carla_closed_loop:
+    if: ${{ !cancelled() }}
+    needs:
+      - smoke_pdm_scorer
+      - smoke_data_readers
+      - smoke_train_datasets
+      - smoke_train_resume_compile
+      - smoke_train_mixture
+      - smoke_train_live_builders
+      - smoke_cache_rebuild
+      - smoke_hydra_yaml_configs
+      - smoke_open_loop_eval
+      - smoke_navtest_eval
+      - smoke_release_checkpoint
+      - smoke_release_dataset
+    strategy:
+      fail-fast: false
+      matrix:
+        route: ["24841", "24784", "24340"]
+    env:
+      CHECKPOINT: carla_transfuser
+    runs-on: [self-hosted, closed-loop]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_checkpoints
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.CHECKPOINT_REVISION }}
+
+      - name: Install py123d-garage
+        run: uv pip install -e ".[train,carla]" --group dev
+
+      - name: Drive route ${{ matrix.route }} with ${{ env.CHECKPOINT }}
+        run: |
+          .github/scripts/eval_carla_route.sh \
+            "$CHECKPOINT_CACHE/$CHECKPOINT" "${{ matrix.route }}" \
+            "$RUNNER_TEMP/carla/${{ matrix.route }}" "$CARLA_MIN_SCORE"
+
+
+  smoke_alpasim_pai_closed_loop:
+    if: ${{ !cancelled() }}
+    needs:
+      - smoke_pdm_scorer
+      - smoke_data_readers
+      - smoke_train_datasets
+      - smoke_train_resume_compile
+      - smoke_train_mixture
+      - smoke_train_live_builders
+      - smoke_cache_rebuild
+      - smoke_hydra_yaml_configs
+      - smoke_open_loop_eval
+      - smoke_navtest_eval
+      - smoke_release_checkpoint
+      - smoke_release_dataset
+    strategy:
+      fail-fast: false
+      matrix:
+        checkpoint: [pai_latent_transfuser, vavam]
+        # Short nurec_curated_val scenes.
+        scene: ["clipgt-098e2482-6db2-473b-b08a-2a80be9320f3", "clipgt-23666aa2-ecb8-4c76-9524-fd3b0c615db0", "clipgt-ce63741d-b346-433d-8874-c916660180f8"]
+        # A collision or offroad event scores 0; vavam rarely avoids one, so it only has to drive a while on its own.
+        include:
+          - checkpoint: pai_latent_transfuser
+            min_score: "1"
+            min_meters: "0"
+          - checkpoint: vavam
+            min_score: "0"
+            min_meters: "20"
+    runs-on: [self-hosted, closed-loop]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_checkpoints
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.CHECKPOINT_REVISION }}
+
+      - uses: ./.github/actions/alpasim_workspace
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+
+      - name: Drive ${{ matrix.scene }} with ${{ matrix.checkpoint }}
+        run: |
+          .github/scripts/eval_alpasim_scene.sh \
+            "$CHECKPOINT_CACHE/${{ matrix.checkpoint }}" \
+            "${{ matrix.checkpoint == 'vavam' && 'vavam.sh' || 'latent_transfuser.sh' }}" \
+            "${{ matrix.scene }}" "$RUNNER_TEMP/alpasim/${{ matrix.checkpoint }}/${{ matrix.scene }}" "${{ matrix.min_score }}" "${{ matrix.min_meters }}"
+
+      - name: Stop this runner's simulation containers and prune what no job uses
+        if: always()
+        run: |
+          docker ps -aq --filter "name=^ci-${RUNNER_NAME,,}-" | xargs -r docker rm -f
+          # Every attempt leaves a compose network, every rebuild a dangling image and build cache. Docker refuses a
+          # second prune while one runs; that one does the same work.
+          docker network prune -f || true
+          docker image prune -f || true
+          docker builder prune -f --filter until=72h || true
+
+
+  smoke_alpasim_nuplan_closed_loop:
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    needs:
+      - smoke_pdm_scorer
+      - smoke_data_readers
+      - smoke_train_datasets
+      - smoke_train_resume_compile
+      - smoke_train_mixture
+      - smoke_train_live_builders
+      - smoke_cache_rebuild
+      - smoke_hydra_yaml_configs
+      - smoke_open_loop_eval
+      - smoke_navtest_eval
+      - smoke_release_checkpoint
+      - smoke_release_dataset
+    strategy:
+      fail-fast: false
+      matrix:
+        scene: ${{ fromJSON(github.event_name == 'pull_request' && '["2021.05.25.14.16.10_veh-35_00083_00485-0c318d7923d15b78"]' || '["2021.05.25.14.16.10_veh-35_00083_00485-0c318d7923d15b78", "2021.05.25.14.16.10_veh-35_00083_00485-24567f5ad57455c4", "2021.05.25.14.16.10_veh-35_01100_01664-025b657634505df3"]') }}
+    env:
+      CHECKPOINT: nuplan_latent_transfuser
+      PRESET: "+e2e_challenge_nuplan=dev +cameras=nuplan_3cam"
+      MIN_SCORE: "0"
+      # navtest scenes end 5.5 s in and the driver takes over at 2 s, so 3 s are driven closed-loop; half the scenes stay under 20 m.
+      MIN_METERS: "10"
+    runs-on: [self-hosted, closed-loop]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/memory_report
+      - uses: ./.github/actions/python_venv
+      - uses: ./.github/actions/sync_checkpoints
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.CHECKPOINT_REVISION }}
+      - uses: ./.github/actions/sync_mtgs
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.MTGS_REVISION }}
+      - uses: ./.github/actions/alpasim_workspace
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          garage-dir: .
+      - name: Drive ${{ matrix.scene }} on the nuPlan track with ${{ env.CHECKPOINT }}
+        run: |
+          ALPASIM_NUPLAN_ROOT="$MTGS_ROOT" .github/scripts/eval_alpasim_scene.sh \
+            "$CHECKPOINT_CACHE/$CHECKPOINT" latent_transfuser.sh \
+            "${{ matrix.scene }}" "$RUNNER_TEMP/alpasim_nuplan/${{ matrix.scene }}" "$MIN_SCORE" "$MIN_METERS"
+      - name: Stop this runner's simulation containers and prune what no job uses
+        if: always()
+        run: |
+          docker ps -aq --filter "name=^ci-${RUNNER_NAME,,}-" | xargs -r docker rm -f
+          docker network prune -f || true
+          docker image prune -f || true
+          docker builder prune -f --filter until=72h || true
+  smoke_alpasim_submission_closed_loop:
+    if: ${{ !cancelled() }}
+    needs:
+      - smoke_pdm_scorer
+      - smoke_data_readers
+      - smoke_train_datasets
+      - smoke_train_resume_compile
+      - smoke_train_mixture
+      - smoke_train_live_builders
+      - smoke_cache_rebuild
+      - smoke_hydra_yaml_configs
+      - smoke_open_loop_eval
+      - smoke_navtest_eval
+      - smoke_release_checkpoint
+      - smoke_release_dataset
+    strategy:
+      fail-fast: false
+      matrix:
+        checkpoint: [pai_latent_transfuser, vavam]
+        include:
+          - checkpoint: pai_latent_transfuser
+            min_score: "1"
+            min_meters: "0"
+          - checkpoint: vavam
+            min_score: "0"
+            min_meters: "20"
+    env:
+      SCENE: clipgt-098e2482-6db2-473b-b08a-2a80be9320f3
+    runs-on: [self-hosted, closed-loop]
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/sync_checkpoints
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+          revision: ${{ env.CHECKPOINT_REVISION }}
+
+      - uses: ./.github/actions/alpasim_workspace
+        with:
+          hf-token: ${{ secrets.HF_TOKEN }}
+
+      - name: Build, serve and drive the ${{ matrix.checkpoint }} submission image
+        run: |
+          .github/scripts/eval_alpasim_submission.sh \
+            "$CHECKPOINT_CACHE/${{ matrix.checkpoint }}" "$SCENE" \
+            "$RUNNER_TEMP/alpasim_submission/${{ matrix.checkpoint }}" "${{ matrix.min_score }}" "${{ matrix.min_meters }}"
+
+      - name: Stop this runner's simulation containers and prune what no job uses
+        if: always()
+        run: |
+          docker ps -aq --filter "name=^ci-${RUNNER_NAME,,}-" | xargs -r docker rm -f
+          # Every attempt leaves a compose network, every rebuild a dangling image and build cache. Docker refuses a
+          # second prune while one runs; that one does the same work.
+          docker network prune -f || true
+          docker image prune -f || true
+          docker builder prune -f --filter until=72h || true

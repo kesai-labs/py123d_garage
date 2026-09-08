@@ -1,0 +1,17 @@
+# @package _global_
+# The three nuPlan track cameras the Latent TransFuser reads, at the challenge's 1920x1080.
+runtime:
+  simulation_config:
+    cameras:
+      - logical_id: CAM_L0
+        frame_interval_us: 500_000
+        height: 1080
+        width: 1920
+      - logical_id: CAM_F0
+        frame_interval_us: 500_000
+        height: 1080
+        width: 1920
+      - logical_id: CAM_R0
+        frame_interval_us: 500_000
+        height: 1080
+        width: 1920

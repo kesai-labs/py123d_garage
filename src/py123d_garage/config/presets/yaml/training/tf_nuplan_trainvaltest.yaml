@@ -1,0 +1,19 @@
+# @package _global_
+# Mirrors config.presets.python.training.transfuser:tf_nuplan_trainvaltest; every omitted key keeps its schema default.
+defaults:
+- /policy@policy_config: tf_nuplan
+- /offline_data_sources/tf_nuplan@offline_data_sources.nuplan_train: nuplan_train
+- /offline_data_sources/tf_nuplan@offline_data_sources.nuplan_val: nuplan_val
+- /offline_data_sources/tf_nuplan@offline_data_sources.nuplan_test: nuplan_test
+- _self_
+lightning_trainer_config:
+  max_epochs: 63
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: norm
+epochs_to_keep_checkpoints_for:
+- 0
+- 2
+- 6
+- 14
+- 30
+- 62

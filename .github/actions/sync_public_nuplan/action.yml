@@ -1,0 +1,52 @@
+name: sync_public_nuplan
+description: >-
+  Incremental download of a fixed slice of the public kesai-labs/nuplan release
+  into $HOME/ci-cache of whichever machine the job landed on: the maps, one
+  train and one val log, and four short nuplan_test logs dense in navtest
+  anchors (478 of them). Side cameras are skipped, nothing in CI reads them.
+  Exports PUBLIC_NUPLAN_CACHE, a data root holding nuplan/123D. The flock covers
+  overlapping jobs, so the first job on a machine downloads while the others wait.
+inputs:
+  hf-token:
+    description: Hugging Face token; the dataset is public, the token only lifts rate limits.
+    required: false
+  revision:
+    description: Commit of kesai-labs/nuplan to download.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        HF_TOKEN: ${{ inputs.hf-token }}
+        REVISION: ${{ inputs.revision }}
+      run: |
+        uv pip install huggingface_hub
+        cache="$HOME/ci-cache/public_nuplan/$REVISION"
+        mkdir -p "$cache/nuplan"
+        logs=(
+          logs/nuplan_train/2021.05.12.19.36.12_veh-35_00005_00204
+          logs/nuplan_val/2021.06.07.11.59.52_veh-35_02283_02464
+          logs/nuplan_test/2021.09.16.13.53.10_veh-42_00180_00342
+          logs/nuplan_test/2021.10.06.07.26.10_veh-52_02208_02394
+          logs/nuplan_test/2021.10.06.08.16.17_veh-52_01430_01579
+          logs/nuplan_test/2021.09.16.14.39.34_veh-42_01609_01687
+        )
+        includes=(--include "maps/*")
+        for log in "${logs[@]}"; do
+          includes+=(--include "$log/*")
+        done
+        (
+          flock 9
+          for _attempt in 1 2 3 4 5; do
+            hf download kesai-labs/nuplan --repo-type dataset --revision "$REVISION" \
+              "${includes[@]}" \
+              --exclude "*/camera.pcam_b0.arrow" --exclude "*/camera.pcam_l1.arrow" --exclude "*/camera.pcam_l2.arrow" \
+              --exclude "*/camera.pcam_r1.arrow" --exclude "*/camera.pcam_r2.arrow" \
+              --local-dir "$cache/nuplan/123D" --max-workers 4 && exit 0
+            echo "download attempt $_attempt failed (rate limit?), retrying in 90s"
+            sleep 90
+          done
+          exit 1
+        ) 9>"$cache.lock"
+        echo "PUBLIC_NUPLAN_CACHE=$cache" >> "$GITHUB_ENV"

@@ -1,0 +1,268 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [ "setuptools>=68", "wheel" ]
+
+[project]
+name = "py123d-garage"
+version = "0.1.0"
+description = "Py123D Garage"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [ { name = "KE:SAI", email = "long@kesai.eu" } ]
+requires-python = ">=3.10,<3.14"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "beartype>=0.19",
+  "einops>=0.8",
+  "hydra-core>=1.3",
+  "jaxtyping>=0.3",
+  "numba>=0.61",
+  "numpy>=2.1,<2.3",
+  "omegaconf>=2.3",
+  "opencv-python-headless>=4.10.0.84",
+  "pandas>=2.2.3",
+  "pillow>=10.4",
+  "py123d>=0.7",
+  "pyyaml>=6.0.2",
+  "shapely>=2.0.6",
+  "timm>=1",
+  "torch>=2.8,<2.9",
+  "torchmetrics>=1.3",
+  "torchvision>=0.23,<0.24",
+  "tqdm>=4.65",
+  "typing-extensions>=4.5",
+]
+optional-dependencies.alpasim = [
+  "grpcio>=1.60",
+]
+optional-dependencies.carla = [
+  "carla==0.9.15",
+  "dictor>=0.1",
+  "ephem>=4",
+  "py-trees==0.8.3",
+  # The vendored leaderboards read the carla version through pkg_resources, which setuptools 82 removed.
+  "setuptools<82",
+  "simple-watchdog-timer>=0.1",
+  "tabulate>=0.9",
+  "transforms3d>=0.4",
+  "xmlschema>=2",
+]
+optional-dependencies.train = [
+  "huggingface-hub>=0.34,<2",
+  "lightning>=2.4,<3",
+  "lmdb>=1.6.2,<2",
+  "wandb>=0.17.5",
+]
+urls."Bug Tracker" = "https://github.com/kesai-labs/py123d_garage/issues"
+urls.Homepage = "https://github.com/kesai-labs/py123d_garage"
+scripts.py123d-garage-cache = "py123d_garage.cache.build_cache:main"
+scripts.py123d-garage-evaluation-alpasim = "py123d_garage.evaluation.alpasim.evaluate:main"
+scripts.py123d-garage-evaluation-carla = "py123d_garage.evaluation.carla.evaluate:main"
+scripts.py123d-garage-evaluation-navsim = "py123d_garage.evaluation.navsim.evaluate:main"
+scripts.py123d-garage-evaluation-open-loop = "py123d_garage.evaluation.open_loop.evaluate:main"
+scripts.py123d-garage-training = "py123d_garage.training.train:main"
+entry-points."alpasim.configs".garage = "py123d_garage.evaluation.alpasim.configs"
+
+[dependency-groups]
+dev = [
+  "basedpyright==1.39.9",
+  "codespell==2.4.1",
+  "import-linter==2.13",
+  "pandas-stubs>=2.3",
+  "pre-commit==4.6.1",
+  "pyarrow-stubs>=20",
+  "pydoclint==0.9.1",
+  "pytest==9.1.1",
+  "pytest-cov==7.1",
+  "ruff==0.15.22",
+  "scipy-stubs>=1.15",
+  "types-networkx>=3.5",
+]
+
+[tool.setuptools]
+package-data.py123d_garage = [ "py.typed", "**/*.yaml", "**/*.yml", "**/*.proto", "**/*.xodr.gz", "**/*.ids" ]
+packages.find.where = [ "src" ]
+
+[tool.uv]
+constraint-dependencies = [ "pydantic>=2.8" ]
+
+[tool.ruff]
+line-length = 120
+# Vendored code keeps its upstream shape.
+extend-exclude = [ "lib", "src/py123d_garage/policy/vavam/network" ]
+fix = true
+format.quote-style = "double"
+lint.select = [
+  "A",
+  "B",
+  "C4",
+  "D209",
+  "D213",
+  "DTZ",
+  "E",
+  "ERA001",
+  "F",
+  "FURB",
+  "G001",
+  "G002",
+  "G003",
+  "I",
+  "ISC003",
+  "NPY",
+  "PERF",
+  "PIE",
+  "PLR0402",
+  "PT",
+  "PTH",
+  "RET",
+  "RUF",
+  "SIM",
+  "T201",
+  "UP",
+]
+lint.ignore = [ "E501", "F722" ]
+lint.per-file-ignores."**/__init__.py" = [ "F401" ]
+lint.per-file-ignores."*.ipynb" = [ "T201" ]
+# The ci scripts print the overrides their workflow passes on.
+lint.per-file-ignores.".github/scripts/**" = [ "T201" ]
+# @config dataclasses deep-copy mutable defaults per instance (see config_help.config).
+lint.per-file-ignores."src/py123d_garage/api/abstract_policy_config.py" = [ "RUF012" ]
+lint.per-file-ignores."src/py123d_garage/config/**" = [ "RUF012" ]
+lint.isort.known-first-party = [ "py123d_garage" ]
+lint.isort.required-imports = [ "from __future__ import annotations" ]
+
+[tool.codespell]
+ignore-words-list = "statics,deques,ue"
+skip = "*/policy/vavam/network/*"
+
+[tool.pydoclint]
+style = "google"
+exclude = ".*/policy/vavam/network/.*"
+arg-type-hints-in-docstring = false
+skip-checking-raises = true
+allow-init-docstring = true
+check-return-types = false
+check-yield-types = false
+
+[tool.pytest]
+ini_options.pythonpath = [ "src" ]
+ini_options.testpaths = [ "tests" ]
+ini_options.markers = [
+  "slow: tests that are slow to run (deselected by default; run with `-m slow` or `-m ''`)",
+]
+ini_options.addopts = [ "-m", "not slow" ]
+
+[tool.coverage]
+run.branch = true
+# Measure every module, not only the ones a test happens to import; without this
+# an entirely untested package reports no lines instead of 0%.
+run.parallel = false
+run.source = [ "py123d_garage" ]
+report.exclude_also = [
+  "@(abc\\.)?abstractmethod",
+  "@(typing\\.)?overload",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]
+report.precision = 1
+report.show_missing = true
+report.skip_covered = false
+html.directory = "outputs/coverage/html"
+xml.output = "outputs/coverage/coverage.xml"
+
+[tool.basedpyright]
+include = [ "src/py123d_garage", "tests" ]
+typeCheckingMode = "standard"
+pythonVersion = "3.10"
+# The editable install is invisible to static analysis; resolve imports from src/.
+extraPaths = [ "src" ]
+stubPath = "lib/typing"
+# jaxtyping shape annotations are checked at runtime by beartype, not statically.
+reportMissingTypeStubs = false
+reportImplicitOverride = "error"
+executionEnvironments = [
+  # CARLA and the leaderboard join sys.path only at runtime.
+  { root = "src/py123d_garage/evaluation/carla", extraPaths = [ "src" ], reportMissingImports = "hint" },
+  # alpasim_driver/alpasim_grpc live in the gitignored AlpaSim checkout; without it (CI) their imports and @override checks degrade to warnings.
+  { root = "src/py123d_garage/evaluation/alpasim", extraPaths = [
+    "src",
+    "lib/alpasim/alpasim/src/driver/src",
+    "lib/alpasim/alpasim/src/grpc"
+  ], reportMissingImports = "hint", reportGeneralTypeIssues = "warning" },
+  # Vendored VaVAM code keeps its upstream shape; standard mode without the strict extras.
+  { root = "src/py123d_garage/policy/vavam/network", extraPaths = [ "src" ], reportImplicitOverride = "none", reportGeneralTypeIssues = "warning", reportArgumentType = "warning", reportAssignmentType = "warning", reportCallIssue = "warning", reportAttributeAccessIssue = "warning", reportOptionalMemberAccess = "warning", reportReturnType = "warning", reportIndexIssue = "warning", reportOperatorIssue = "warning", reportRedeclaration = "warning", reportIncompatibleMethodOverride = "warning", reportPossiblyUnboundVariable = "warning" },
+  # Full typing coverage: no Unknown may flow into annotated packages.
+  { root = "src/py123d_garage/evaluation", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/policy", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/api", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/cache", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/common", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/py123d_help/scene_filters", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/py123d_help/scene_builders", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/config", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src/py123d_garage/training", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
+  { root = "src", extraPaths = [ "src" ] },
+]
+
+[tool.importlinter]
+root_package = "py123d_garage"
+
+[[tool.importlinter.contracts]]
+# Lower layers never import higher ones; siblings on one line stay independent.
+name = "layered architecture"
+type = "layers"
+layers = [
+  "training | evaluation",
+  "policy",
+  "config",
+  "api",
+  "cache",
+  "py123d_help",
+  "common",
+]
+containers = [ "py123d_garage" ]
+ignore_imports = [
+  # The cache-build entry point composes the policy it caches for, over the training run's sources.
+  "py123d_garage.cache.build_cache -> py123d_garage.api.abstract_offline_data_source_config",
+  "py123d_garage.cache.build_cache -> py123d_garage.api.abstract_policy",
+  "py123d_garage.cache.build_cache -> py123d_garage.api.contract_verifications",
+  "py123d_garage.cache.build_cache -> py123d_garage.config.**",
+]
+
+[[tool.importlinter.contracts]]
+# Reading a scene, choosing which scenes to read and building them are separate jobs.
+name = "py123d_help siblings stay independent"
+type = "independence"
+modules = [
+  "py123d_garage.py123d_help.scene_builders",
+  "py123d_garage.py123d_help.scene_filters",
+  "py123d_garage.py123d_help.scene_readers",
+]
+
+[[tool.importlinter.contracts]]
+name = "config schema is independent of presets"
+type = "forbidden"
+source_modules = [ "py123d_garage.config.schema" ]
+forbidden_modules = [ "py123d_garage.config.presets" ]
+
+[[tool.importlinter.contracts]]
+name = "training is policy-agnostic"
+type = "forbidden"
+source_modules = [ "py123d_garage.training" ]
+forbidden_modules = [ "py123d_garage.policy", "py123d_garage.evaluation" ]
+
+[[tool.importlinter.contracts]]
+name = "evaluation reaches policies only through the api layer"
+type = "forbidden"
+source_modules = [ "py123d_garage.evaluation" ]
+forbidden_modules = [ "py123d_garage.policy", "py123d_garage.training" ]

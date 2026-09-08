@@ -1,0 +1,8 @@
+# The cache entry point: the schema, the training plan training@plan=<name or module:function> selects, then the command line.
+defaults:
+  - schema/build_cache
+  - training@plan: null
+  - hydra_settings
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+  - _self_

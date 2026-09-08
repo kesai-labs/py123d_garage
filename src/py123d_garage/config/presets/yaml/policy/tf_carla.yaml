@@ -1,0 +1,45 @@
+# Mirrors config.presets.python.policy.transfuser:tf_carla.
+transfuser_config:
+  trajectory_horizon_us: 2000000
+  trajectory_interval_us: 250000
+  required_target_point_distances_m:
+  - 45.0
+  camera_config:
+    input_cameras:
+      nuplan:
+      - PCAM_L0
+      - PCAM_F0
+      - PCAM_R0
+      carla:
+      - PCAM_L0
+      - PCAM_F0
+      - PCAM_R0
+      physical-ai-av:
+      - FTCAM_L0
+      - FTCAM_F0
+      - FTCAM_R0
+      kesai:
+      - FTCAM_L0
+      - FTCAM_F0
+      - FTCAM_R0
+    image_width: 1152
+    image_height: 384
+  lidar_config:
+    lidar_interval_us: 50000
+    lidar_horizon_us: 200000
+  box_detection_config:
+    predict_box_velocity: true
+  perspective_config:
+    use_semantic: true
+    use_depth: true
+  visualization_config:
+    prediction_trajectory_style:
+      color_rgb:
+      - 214
+      - 39
+      - 40
+    ground_truth_trajectory_style:
+      color_rgb:
+      - 44
+      - 160
+      - 44

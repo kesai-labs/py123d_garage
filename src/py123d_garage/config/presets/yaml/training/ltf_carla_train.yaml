@@ -1,0 +1,8 @@
+# @package _global_
+# Mirrors config.presets.python.training.latent_transfuser:ltf_carla_train; every omitted key keeps its schema default.
+defaults:
+- /policy@policy_config: ltf_carla
+- /offline_data_sources/ltf_carla@offline_data_sources.carla: carla
+- _self_
+optimizer_config:
+  fused: true

@@ -1,0 +1,42 @@
+name: sync_mtgs
+description: >-
+  Incremental download of the Alpasim nuPlan track data (trajdata cache, scene
+  configs and the first MTGS asset shard) into $HOME/ci-cache/mtgs of whichever
+  machine the job landed on, extracted once, exported as MTGS_ROOT. A repo
+  variable MTGS_ROOT points every runner at one shared copy instead.
+inputs:
+  hf-token:
+    description: Hugging Face token for the dataset download.
+    required: true
+  revision:
+    description: Commit of OpenDriveLab/AlpasimChallenge2026_nuplan_track to download.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        HF_TOKEN: ${{ inputs.hf-token }}
+        REVISION: ${{ inputs.revision }}
+      run: |
+        uv pip install huggingface_hub
+        mtgs_root="${MTGS_ROOT:-$HOME/ci-cache/mtgs}"
+        hf_dir="$mtgs_root/hf"
+        mkdir -p "$hf_dir"
+        (
+          flock 9
+          if [ ! -f "$mtgs_root/.extracted-$REVISION" ]; then
+            for _attempt in 1 2 3 4 5; do
+              hf download OpenDriveLab/AlpasimChallenge2026_nuplan_track --repo-type dataset --revision "$REVISION" \
+                --local-dir "$hf_dir" --max-workers 4 \
+                trajdata_cache/nuplan_test.tar.gz MTGS_asset/navtest/configs.tar.gz MTGS_asset/navtest/assets/part001.tar.gz && break
+              echo "download attempt $_attempt failed (rate limit?), retrying in 90s"
+              sleep 90
+            done
+            for tarball in "$hf_dir"/trajdata_cache/nuplan_test.tar.gz "$hf_dir"/MTGS_asset/navtest/configs.tar.gz "$hf_dir"/MTGS_asset/navtest/assets/part001.tar.gz; do
+              tar -xzf "$tarball" -C "$mtgs_root"
+            done
+            touch "$mtgs_root/.extracted-$REVISION"
+          fi
+        ) 9>"$mtgs_root.lock"
+        echo "MTGS_ROOT=$mtgs_root" >> "$GITHUB_ENV"

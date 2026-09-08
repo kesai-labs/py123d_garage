@@ -1,0 +1,8 @@
+name: memory_report
+description: >-
+  Samples the job's cgroup memory once a second and prints the peak, the cap,
+  and the OOM-kill count when the job ends.
+runs:
+  using: node20
+  main: main.js
+  post: post.js

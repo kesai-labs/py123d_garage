@@ -1,0 +1,37 @@
+name: sync_data
+description: >-
+  Incremental download of the smoke datasets into $HOME/ci-cache of whichever
+  machine the job landed on, exported as DATA_MINI_CACHE. The flock covers
+  overlapping jobs, so the first job on a machine downloads while the others wait.
+inputs:
+  hf-token:
+    description: Hugging Face token for the dataset downloads.
+    required: true
+  data-mini-revision:
+    description: Commit of kesai-labs/py123d_garage_dev_data_mini to download.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        HF_TOKEN: ${{ inputs.hf-token }}
+        DATA_MINI_REVISION: ${{ inputs.data-mini-revision }}
+      run: |
+        if [ -z "$HF_TOKEN" ]; then
+          echo "::warning::the hf-token input is empty; private datasets will not download"
+        fi
+        uv pip install huggingface_hub
+        data_mini_cache="$HOME/ci-cache/data_mini"
+        mkdir -p "$data_mini_cache"
+        (
+          flock 9
+          for _attempt in 1 2 3 4 5; do
+            hf download kesai-labs/py123d_garage_dev_data_mini --repo-type dataset --revision "$DATA_MINI_REVISION" \
+              --local-dir "$data_mini_cache" --max-workers 4 && exit 0
+            echo "download attempt $_attempt failed (rate limit?), retrying in 90s"
+            sleep 90
+          done
+          exit 1
+        ) 9>"$data_mini_cache.lock"
+        echo "DATA_MINI_CACHE=$data_mini_cache" >> "$GITHUB_ENV"

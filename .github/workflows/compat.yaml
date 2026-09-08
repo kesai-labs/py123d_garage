@@ -1,0 +1,52 @@
+name: compat
+
+# Validates pyproject's requires-python claim and dependency bounds beyond ci's 3.10.
+on:
+  push:
+    branches: [main, pre-release]
+    paths-ignore:
+      - "**/docs/**"
+      - "**/README.md"
+  workflow_dispatch:
+
+concurrency:
+  group: compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        resolution: [highest]
+        include:
+          - python-version: "3.10"
+            resolution: lowest-direct
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install py123d-garage
+        run: |
+          uv venv --python ${{ matrix.python-version }} "$RUNNER_TEMP/venv"
+          echo "VIRTUAL_ENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          VIRTUAL_ENV="$RUNNER_TEMP/venv" uv pip install --resolution ${{ matrix.resolution }} -e ".[train]" --group dev
+
+      - name: Test with pytest
+        env:
+          PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "true"
+          PY123D_GARAGE_DATA_ROOT: "/data"
+        run: pytest tests/unit -m ""

@@ -1,0 +1,8 @@
+# The navsim evaluation entry point: the schema, a benchmark yaml an evaluation= selects, then the command line; the policy replays from the checkpoint.
+defaults:
+  - schema/evaluate_navsim
+  - optional evaluation: null
+  - hydra_settings
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+  - _self_

@@ -1,0 +1,55 @@
+# python
+*.pyc
+**/__pycache__/
+.pytest_cache/*
+.pydevproject
+
+# IDE
+.vscode/*
+
+# Pip
+*.egg-info
+
+# media
+*.gif
+*.mp4
+*.png
+!docs/assets/*.png
+
+# files
+*.log
+*.pkl
+*.jpg
+*.pcd
+
+# exp
+exp
+
+# lsf
+*.bsub
+
+# dev
+scripts_dev/*
+visualization/*
+debug/*
+.coverage
+.claude
+
+
+# Sphinx documentation
+docs/_build/
+docs/build/
+_build/
+.doctrees/
+
+# CARLA
+lib/carla/simulator/
+
+# AlpaSim
+lib/alpasim/alpasim
+
+# symlinks into the private repo
+outputs
+/data
+/data_mini
+outputs

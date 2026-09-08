@@ -1,0 +1,15 @@
+name: stage_public_data_root
+description: >-
+  Links the public nuplan slice sync_public_nuplan cached into a per-run data
+  root and exports it as PY123D_GARAGE_DATA_ROOT. Symlinks, so the run never
+  writes into the cache.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        run_root="$RUNNER_TEMP/public_data"
+        rm -rf "$run_root"
+        mkdir -p "$run_root/nuplan"
+        ln -s "$(realpath "$PUBLIC_NUPLAN_CACHE/nuplan/123D")" "$run_root/nuplan/123D"
+        echo "PY123D_GARAGE_DATA_ROOT=$run_root" >> "$GITHUB_ENV"
