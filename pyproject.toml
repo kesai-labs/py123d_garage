@@ -4,7 +4,7 @@ requires = [ "setuptools>=68", "wheel" ]
 
 [project]
 name = "py123d-garage"
-version = "0.1.0"
+version = "0.1.1"
 description = "Py123D Garage"
 readme = "README.md"
 license = { text = "Apache-2.0" }

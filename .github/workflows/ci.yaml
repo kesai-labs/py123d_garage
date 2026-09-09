@@ -19,33 +19,16 @@ concurrency:
 jobs:
   ci:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/memory_report
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: pyproject.toml
+      - uses: ./.github/actions/python_venv
 
       - name: Install py123d-garage
-        run: |
-          uv venv --python 3.10 "$RUNNER_TEMP/venv"
-          echo "VIRTUAL_ENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-          VIRTUAL_ENV="$RUNNER_TEMP/venv" uv pip install -e ".[train]" --group dev
-
-      - name: Cache pre-commit environments
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+        run: uv pip install -e ".[train]" --group dev
 
       - name: Run pre-commit
         run: pre-commit run --all-files

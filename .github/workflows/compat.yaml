@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   compat:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -29,21 +29,12 @@ jobs:
 
       - uses: ./.github/actions/memory_report
 
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/python_venv
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: pyproject.toml
-
       - name: Install py123d-garage
-        run: |
-          uv venv --python ${{ matrix.python-version }} "$RUNNER_TEMP/venv"
-          echo "VIRTUAL_ENV=$RUNNER_TEMP/venv" >> "$GITHUB_ENV"
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-          VIRTUAL_ENV="$RUNNER_TEMP/venv" uv pip install --resolution ${{ matrix.resolution }} -e ".[train]" --group dev
+        run: uv pip install --resolution ${{ matrix.resolution }} -e ".[train]" --group dev
 
       - name: Test with pytest
         env:
