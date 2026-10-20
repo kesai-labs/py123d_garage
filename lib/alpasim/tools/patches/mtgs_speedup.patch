@@ -1,0 +1,118 @@
+MTGS renderer speedups for the nuPlan track: renders only the cameras a request names instead of every camera of the
+recording, scales, casts and flips the frames on the GPU, and reuses the undistortion maps across scenes. The frames
+match the unpatched renderer up to a few pixels: in a test, 157 of 2 million pixels of a frame differed, by at most 3
+levels. setup_alpasim.sh applies it.
+
+diff --git a/plugins/mtgs/server/engine/mtgs.py b/plugins/mtgs/server/engine/mtgs.py
+index fd385e4..3aa5b97 100644
+--- a/plugins/mtgs/server/engine/mtgs.py
++++ b/plugins/mtgs/server/engine/mtgs.py
+@@ -9,6 +9,7 @@ from typing import Optional, Tuple, Union
+ 
+ import cv2
+ import numpy as np
++from collections import OrderedDict
+ import torch
+ from pyquaternion import Quaternion
+ 
+@@ -32,6 +33,30 @@ from .utils.portable_utils import AttrDict, convert_to_attribute_dict
+ logger = logging.getLogger(__name__)
+ 
+ 
++_INVERSE_RECTIFICATION_MAPS: "OrderedDict[tuple, tuple]" = OrderedDict()
++_INVERSE_RECTIFICATION_MAPS_MAX = 64
++
++
++def _inverse_rectification_map(intrinsic, distortion, width, height):
++    # The maps depend only on the camera model, which repeats across scenes, and cost ~0.5 s per camera.
++    key = (intrinsic.tobytes(), distortion.tobytes(), int(width), int(height))
++    maps = _INVERSE_RECTIFICATION_MAPS.get(key)
++    if maps is None:
++        new_intrinsic, _ = cv2.getOptimalNewCameraMatrix(
++            intrinsic, distortion, (width, height), 1
++        )
++        maps = (
++            new_intrinsic,
++            cv2.initInverseRectificationMap(
++                intrinsic, distortion, None, new_intrinsic, (width, height), cv2.CV_32FC1
++            ),
++        )
++        _INVERSE_RECTIFICATION_MAPS[key] = maps
++        while len(_INVERSE_RECTIFICATION_MAPS) > _INVERSE_RECTIFICATION_MAPS_MAX:
++            _INVERSE_RECTIFICATION_MAPS.popitem(last=False)
++    return maps
++
++
+ def _normalize_asset_id(asset_id: str) -> str:
+     """Strip trailing '-NNN' version suffix from an asset ID (e.g. 'scene-001' → 'scene')."""
+     if len(asset_id) > 4 and asset_id[-4] == "-":
+@@ -245,8 +270,9 @@ class MTGS(BaseRenderer):
+         return torch.from_numpy(transform).float()
+ 
+     def set_sensors(self, sensors, ego2global):
+-        if self.sensor_caches is not None:
+-            camera_to_egos, intrinsics, map_inverse_distorts, hw_dict = (
++        sensor_names = tuple(sensors.keys())
++        if self.sensor_caches is not None and self.sensor_caches[0] == sensor_names:
++            _, camera_to_egos, intrinsics, map_inverse_distorts, hw_dict = (
+                 self.sensor_caches
+             )
+             camera_to_worlds = torch.einsum("ij,bjk->bik", ego2global, camera_to_egos)
+@@ -270,16 +296,8 @@ class MTGS(BaseRenderer):
+ 
+             intrinsic = np.array(cam_info["intrinsic"])
+             distortion = np.array(cam_info["distortion"])
+-            new_intrinsic, roi = cv2.getOptimalNewCameraMatrix(
+-                intrinsic, distortion, (cam_info["width"], cam_info["height"]), 1
+-            )
+-            map_inverse_distort = cv2.initInverseRectificationMap(
+-                intrinsic,
+-                distortion,
+-                None,
+-                new_intrinsic,
+-                (cam_info["width"], cam_info["height"]),
+-                cv2.CV_32FC1,
++            new_intrinsic, map_inverse_distort = _inverse_rectification_map(
++                intrinsic, distortion, cam_info["width"], cam_info["height"]
+             )
+ 
+             intrinsic_torch = (
+@@ -302,6 +320,7 @@ class MTGS(BaseRenderer):
+         height = height if isinstance(height, int) else height.item()
+         width = width if isinstance(width, int) else width.item()
+         self.sensor_caches = (
++            sensor_names,
+             sensor2egos,
+             intrinsics,
+             map_inverse_distorts,
+@@ -477,9 +496,9 @@ class MTGS(BaseRenderer):
+         alpha = alpha[:, ...]
+         rgb = render[:, ..., :3] + (1 - alpha) * self.background_color
+         rgb = torch.clamp(rgb, 0.0, 1.0)
+-        rgb = rgb.cpu().numpy() * 255
+-        rgb = rgb.astype(np.uint8)
+-        rgb = [cv2.cvtColor(rgb[i], cv2.COLOR_RGB2BGR) for i in range(rgb.shape[0])]
++        # Scale, truncate to uint8 and flip RGB to BGR on the GPU; the same bytes numpy's astype and cvtColor produced.
++        rgb = (rgb * 255).to(torch.uint8).flip(-1).contiguous().cpu().numpy()
++        rgb = [rgb[i] for i in range(rgb.shape[0])]
+ 
+         outputs = {"image": rgb}
+         if render_mode == "RGB+ED":
+diff --git a/plugins/mtgs/server/servicer.py b/plugins/mtgs/server/servicer.py
+index 60e64eb..692bc7b 100644
+--- a/plugins/mtgs/server/servicer.py
++++ b/plugins/mtgs/server/servicer.py
+@@ -368,6 +368,13 @@ class MTGSSensorsimService(SensorsimServiceServicer):
+         render_state_dict = rgb_render_request_to_render_state(
+             first_request, asset_manager=renderer.asset_manager
+         )
++        # The scene lists every camera of the recording; render only the ones this request asks for.
++        requested = {req.camera_intrinsics.logical_id for req in request.rgb_requests}
++        cameras = render_state_dict.get(RenderState.CAMERAS) or {}
++        if requested & cameras.keys():
++            render_state_dict[RenderState.CAMERAS] = {
++                name: camera for name, camera in cameras.items() if name in requested
++            }
+         render_state = RenderState(**render_state_dict)
+ 
+         result = renderer.render(render_state)

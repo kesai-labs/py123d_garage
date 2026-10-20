@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """OnlineSceneAPI: bundle merging, nearest-in-tolerance iteration reads, clamping, and snapshots."""
 
 from __future__ import annotations
@@ -95,12 +98,12 @@ def test_snapshot_is_frozen_against_later_appends() -> None:
 def test_old_bundles_are_trimmed_by_time() -> None:
     scene = _scene(num_history_iterations=1)
     scene.append(1_000_000, {"ego_state_se3": _ego_state(1_000_000)})
-    scene.append(2_000_000, {"ego_state_se3": _ego_state(2_000_000)})
+    scene.append(70_000_000, {"ego_state_se3": _ego_state(70_000_000)})
     timestamps = scene.snapshot().get_all_modality_timestamps(
         ModalityType.EGO_STATE_SE3,
         include_history=True,
     )
-    assert [timestamp.time_us for timestamp in timestamps] == [2_000_000]
+    assert [timestamp.time_us for timestamp in timestamps] == [70_000_000]
 
 
 def test_between_timestamps_yields_time_ordered_modalities() -> None:
@@ -145,3 +148,16 @@ def test_grid_timestamps_and_empty_scene() -> None:
     assert grid_us == [800_000, 900_000, 1_000_000]
     assert snapshot.get_route_progress_at_iteration(0) == 3.0
     assert np.isclose(snapshot.get_scene_metadata().history_duration_s, 0.2)
+
+
+def test_history_backfilled_before_the_clock_start_is_served() -> None:
+    """A rollout that starts at the simulator's time zero backfills its history at negative times."""
+    scene = _scene(num_history_iterations=2)
+    anchor_us = _INTERVAL_US // 4
+    for step in (2, 1):
+        timestamp_us = anchor_us - step * _INTERVAL_US
+        scene.append(timestamp_us, {"ego_state_se3": _ego_state(timestamp_us, x=-float(step))})
+    scene.append(anchor_us, {"ego_state_se3": _ego_state(anchor_us, x=0.0)})
+    snapshot = scene.snapshot()
+    assert snapshot.newest_timestamp_us == anchor_us
+    assert [_ego_x_at_iteration(snapshot, iteration) for iteration in (-2, -1, 0)] == [-2.0, -1.0, 0.0]

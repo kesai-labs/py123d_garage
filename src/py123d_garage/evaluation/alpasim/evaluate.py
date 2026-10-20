@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+"""Serves a garage policy to AlpaSim as its egodriver gRPC service."""
+
 from __future__ import annotations
 
 import logging
@@ -33,6 +38,13 @@ def main(cfg: DictConfig) -> None:
         raise RuntimeError(f"failed to bind {config.host}:{config.port}")
 
     def request_stop(signum: int, frame: object) -> None:
+        """
+        Stops the server on a termination signal.
+
+        Args:
+            signum: the received signal.
+            frame: the interrupted stack frame, unused.
+        """
         del frame
         LOG.info(f"received signal {signum}, stopping")
         server.stop(grace=0.0)

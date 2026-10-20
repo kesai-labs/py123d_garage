@@ -16,7 +16,7 @@ from py123d_garage.evaluation.navsim.help.trajectory_grid import TrajectoryGrid
 
 
 class PDMEmergencyBrake:
-    """Class for emergency brake maneuver of PDM-Closed."""
+    """Emergency brake maneuver of PDM-Closed."""
 
     def __init__(
         self,
@@ -25,18 +25,14 @@ class PDMEmergencyBrake:
         min_long_accel: float = -4.05,
     ):
         """
-        Constructor for PDMEmergencyBrake.
+        Sets up the brake controller.
 
         Args:
-            trajectory_grid: Sampling parameters for final trajectory
-            max_long_accel: maximum longitudinal acceleration for braking, defaults to 2.40
-            min_long_accel: min longitudinal acceleration for braking, defaults to -4.05
+            trajectory_grid: Grid of the braking trajectory.
+            max_long_accel: [m/s^2] Maximum longitudinal acceleration while braking.
+            min_long_accel: [m/s^2] Minimum longitudinal acceleration while braking.
         """
-
-        # trajectory parameters
         self._trajectory_grid = trajectory_grid
-
-        # braking parameters
         self._max_long_accel: float = max_long_accel  # [m/s^2]
         self._min_long_accel: float = min_long_accel  # [m/s^2]
 
@@ -48,10 +44,10 @@ class PDMEmergencyBrake:
         Generates a braking trajectory that decelerates ego to zero velocity.
 
         Args:
-            ego_state_se2: state object of ego
+            ego_state_se2: Current ego state.
 
         Returns:
-            braking trajectory as SE2 in the absolute/global frame
+            The braking trajectory in the absolute frame.
         """
         current_time_point = ego_state_se2.timestamp
         assert ego_state_se2.dynamic_state_se2 is not None, (
@@ -96,7 +92,6 @@ class PDMEmergencyBrake:
             dtype=np.int64,
         )
 
-        # Propagate planned trajectory for set number of samples
         for time_idx in range(self._trajectory_grid.num_poses + 1):
             time_t = self._trajectory_grid.interval_s * time_idx
             pose_se2_array[time_idx, PoseSE2Index.X] = correcting_velocity * time_t
@@ -104,7 +99,6 @@ class PDMEmergencyBrake:
                 time_t * 1e6,
             )
 
-        # Transform to absolute coordinates
         pose_se2_array = rel_to_abs_se2_array(
             ego_state_se2.center_se2,
             pose_se2_array,

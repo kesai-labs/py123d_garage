@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 import logging
@@ -14,14 +17,19 @@ from py123d_garage.datatypes.numerics import NonNegativeFloat, PositiveFloat, Po
 
 LOG = logging.getLogger(__name__)
 
+# Fewest timestamps a stream needs before its period is judged.
 _MIN_TIMESTAMPS = 4
+# Relative deviation of the measured period from the declared interval that fails verification.
 _PERIOD_TOLERANCE = 0.2
+# Fraction of dropped frames above which a warning is logged.
 _DROP_WARNING_FRACTION = 0.05
 
 
 def verify_policy_against_scene_filter(
     policy_config: AbstractPolicyConfig,
     scene_filter: SceneFilter,
+    required_future_us: PositiveInt | None = None,
+    route_required: bool = True,
 ) -> None:
     """
     Refuses a scene filter whose guarantees cannot serve the policy's requirements.
@@ -29,6 +37,10 @@ def verify_policy_against_scene_filter(
     Args:
         policy_config: the policy's declared requirements.
         scene_filter: the filter about to select scenes for the policy.
+        required_future_us: the logged future every scene needs past its anchor; None = the policy's trajectory
+            horizon, which its labels span.
+        route_required: whether every scene must carry route out to the policy's farthest target point; False serves
+            the points past the route's end as NaN.
 
     Raises:
         ValueError: on the first guarantee that falls short.
@@ -57,15 +69,21 @@ def verify_policy_against_scene_filter(
             f"the {policy_config.required_history_duration_us} µs of history the policy "
             "consumes: past frames would be clipped at the scene boundary.",
         )
+    if required_future_us is None:
+        required_future_us = policy_config.trajectory_horizon_us
     guaranteed_future_us = round((scene_filter.future_duration_s or 0.0) * 1e6)
-    if guaranteed_future_us < policy_config.trajectory_horizon_us:
+    if guaranteed_future_us < required_future_us:
         raise ValueError(
             f"filter future_duration_s={scene_filter.future_duration_s} cannot span "
-            f"the {policy_config.trajectory_horizon_us} µs trajectory horizon: trajectory "
-            "labels would be clipped at the scene boundary.",
+            f"the {required_future_us} µs of future the scenes need: trajectory labels or "
+            "the scored window would be clipped at the scene boundary.",
         )
-    farthest_target_point_m = max(policy_config.required_target_point_distances_m)
-    if scene_filter.min_remaining_route_m is None or scene_filter.min_remaining_route_m < farthest_target_point_m:
+    farthest_target_point_m = max(policy_config.required_target_point_distances_m, default=0.0)
+    if (
+        route_required
+        and farthest_target_point_m
+        and (scene_filter.min_remaining_route_m is None or scene_filter.min_remaining_route_m < farthest_target_point_m)
+    ):
         raise ValueError(
             f"filter min_remaining_route_m={scene_filter.min_remaining_route_m} cannot "
             f"reach the farthest target point at {farthest_target_point_m} m: scenes "
@@ -110,7 +128,7 @@ def verify_policy_against_benchmark(
     benchmark_config: AbstractBenchmarkConfig,
 ) -> None:
     """
-    Verify that a benchmark's protocol and data sources can meet a policy's requirements.
+    Refuses a benchmark whose protocol or data sources cannot meet the policy's requirements.
 
     Args:
         policy_config: the policy's declared requirements and output shape.
@@ -155,7 +173,7 @@ def verify_policy_against_benchmark(
             served_lidar_interval_us=benchmark_config.served_lidar_interval_us,
             provider=type(benchmark_config).__name__,
         )
-    for offline_data_source_config in benchmark_config.benchmark_offline_data_sources.values():
+    for offline_data_source_config in benchmark_config.benchmark_offline_data_sources:
         verify_policy_against_offline_data_source(policy_config, offline_data_source_config)
 
 
@@ -260,6 +278,8 @@ def _verify_policy_against_provider_target_points(
         ValueError: if a distance falls outside the limits.
     """
     distances_m = policy_config.required_target_point_distances_m
+    if not distances_m:
+        return
     if min_distance_m is not None and min(distances_m) < min_distance_m:
         raise ValueError(
             f"the policy needs a target point at {min(distances_m)} m but {provider} "
@@ -280,16 +300,12 @@ def _verify_stream_records_declared_interval(
     stream: str,
 ) -> None:
     """
-    Fails fast when recorded timestamps contradict a declared stream interval.
+    Fails fast when recorded timestamps contradict a declared stream interval, and warns about dropped frames.
 
-    Dropped frames only ever lengthen gaps, so the period is estimated from the
-    short end of the delta distribution and stays correct up to 75% drops;
-    the holes themselves are counted against it and reported as a warning.
+    The period is the 25th percentile of the gaps, since dropped frames only ever lengthen gaps.
 
     Args:
-        timestamps_us: the stream's recorded timestamps in microseconds, ordered; a
-            clip-relative clock may lead zero, so negative values are accepted;
-            fewer than four are too short to judge and pass silently.
+        timestamps_us: the stream's ordered timestamps in microseconds, possibly negative; fewer than four pass.
         interval_us: the declared spacing to verify.
         provider: names the serving side in messages.
         stream: names the stream in messages, e.g. "camera PCAM_F0".

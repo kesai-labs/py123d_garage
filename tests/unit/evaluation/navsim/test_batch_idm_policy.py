@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for the batch IDM policy against hand-computed car-following behavior."""
 
 from __future__ import annotations

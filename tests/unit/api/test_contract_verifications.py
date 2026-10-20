@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 import logging
@@ -12,7 +15,7 @@ from typing_extensions import override
 
 from py123d_garage.api.abstract_benchmark_config import AbstractBenchmarkConfig
 from py123d_garage.api.abstract_offline_data_source_config import AbstractOfflineDataSourceConfig
-from py123d_garage.api.abstract_policy_config import AbstractPolicyConfig
+from py123d_garage.api.abstract_policy_config import AbstractPolicyConfig, uniform_offsets_us
 from py123d_garage.api.contract_verifications import (
     _verify_stream_records_declared_interval,
     verify_offline_data_source_scenes_declared_intervals,
@@ -24,8 +27,9 @@ from py123d_garage.api.contract_verifications import (
 
 @dataclass
 class _Policy(AbstractPolicyConfig):
-    trajectory_horizon_us: int = 4_000_000
-    trajectory_interval_us: int = 500_000
+    trajectory_offsets_us: list[int] = field(
+        default_factory=lambda: uniform_offsets_us(500_000, 4_000_000),
+    )
     required_target_point_distances_m: list[float] = field(
         default_factory=lambda: [45.0],
     )
@@ -196,12 +200,38 @@ def test_single_frame_policy_needs_no_history() -> None:
     )
 
 
+def test_scored_window_replaces_the_plan_horizon() -> None:
+    verify_policy_against_scene_filter(
+        _Policy(history_duration_us=0),
+        SceneFilter(future_duration_s=2.0, min_remaining_route_m=45.0),
+        required_future_us=2_000_000,
+    )
+    with pytest.raises(ValueError, match="future_duration_s"):
+        verify_policy_against_scene_filter(
+            _Policy(history_duration_us=0),
+            SceneFilter(future_duration_s=2.0, min_remaining_route_m=45.0),
+            required_future_us=3_000_000,
+        )
+
+
+def test_route_not_required_skips_the_route_check() -> None:
+    verify_policy_against_scene_filter(
+        _Policy(history_duration_us=0),
+        SceneFilter(future_duration_s=4.0),
+        route_required=False,
+    )
+
+
 # -- verify_policy_against_benchmark --
 
 
 def test_unconstrained_accepts_any_policy() -> None:
     verify_policy_against_benchmark(
-        _policy([4.0, 45.0, 200.0], trajectory_horizon_us=500_000, history_duration_us=100_000_000),
+        _policy(
+            [4.0, 45.0, 200.0],
+            trajectory_offsets_us=uniform_offsets_us(500_000, 500_000),
+            history_duration_us=100_000_000,
+        ),
         _benchmark(),
     )
 
@@ -227,9 +257,15 @@ def test_short_trajectory_horizon_raises() -> None:
     scored = _LimitedBenchmarkConfig(
         required_horizon_us=4_000_000,
     )
-    verify_policy_against_benchmark(_policy([45.0], trajectory_horizon_us=4_000_000), scored)
+    verify_policy_against_benchmark(
+        _policy([45.0], trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000)),
+        scored,
+    )
     with pytest.raises(ValueError, match=r"scores a 4000000 µs window"):
-        verify_policy_against_benchmark(_policy([45.0], trajectory_horizon_us=2_000_000), scored)
+        verify_policy_against_benchmark(
+            _policy([45.0], trajectory_offsets_us=uniform_offsets_us(500_000, 2_000_000)),
+            scored,
+        )
 
 
 def test_history_over_the_protocol_cap_raises() -> None:
@@ -249,7 +285,7 @@ def test_within_limits_passes() -> None:
 
 def test_benchmark_checks_its_sources() -> None:
     benchmark = _LimitedBenchmarkConfig(
-        benchmark_offline_data_sources={"source": _source(camera_us=100_000)},  # pyright: ignore[reportArgumentType]
+        benchmark_offline_data_sources=[_source(camera_us=100_000)],  # pyright: ignore[reportArgumentType]
     )
     verify_policy_against_benchmark(_policy([45.0], past_camera_us=500_000), benchmark)
     with pytest.raises(ValueError, match="whole number of frames"):

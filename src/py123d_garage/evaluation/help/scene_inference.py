@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Turning one offline data source into this shard's scenes, then into predicted trajectories."""
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from typing_extensions import override
 
+from py123d_garage.api.abstract_benchmark_config import AbstractBenchmarkConfig
 from py123d_garage.api.abstract_offline_data_source_config import AbstractOfflineDataSourceConfig
 from py123d_garage.api.abstract_policy import AnyPolicy
 from py123d_garage.api.abstract_policy_tensors import (
@@ -45,6 +49,7 @@ def build_source_scenes(
     num_shards: int,
     executor: Executor,
     py123d_garage_policy: AnyPolicy,
+    benchmark_config: AbstractBenchmarkConfig | None = None,
 ) -> list[SceneAPI]:
     """
     Builds this shard's slice of one source's benchmark scenes.
@@ -55,6 +60,8 @@ def build_source_scenes(
         num_shards: how many slices the source's logs are cut into.
         executor: worker pool for scene building.
         py123d_garage_policy: the policy the scenes will feed; refuses an unservable filter.
+        benchmark_config: the benchmark scoring the scenes, whose scored-scene guarantees the filter must meet; None
+            holds the filter to the training guarantees.
 
     Returns:
         the shard's scenes of this source.
@@ -69,7 +76,11 @@ def build_source_scenes(
         authored_filter.to_py123d_scene_filter(),
         log_names=shard_log_names,
     )
-    py123d_garage_policy.verify_contract(offline_data_source_config=source, scene_filter=scene_filter)
+    py123d_garage_policy.verify_contract(
+        benchmark_config=benchmark_config,
+        offline_data_source_config=source,
+        scene_filter=scene_filter,
+    )
     scene_builder: ArrowSceneBuilder = build_scene_builder(
         source.data_root,
         lazy=False,
@@ -99,6 +110,7 @@ def run_shard_inference(
     inference_batch_size: int,
     max_workers: int,
     visualization_dir: Path | None = None,
+    nan_past_route_end: bool = False,
 ) -> list[TrajectorySE2]:
     """
     Predicts one trajectory per scene, building the features in loader workers.
@@ -110,8 +122,9 @@ def run_shard_inference(
         cache_root: feature cache store of the source; None = build every feature from the scene.
         inference_batch_size: scenes per forward pass.
         max_workers: loader worker processes.
-        visualization_dir: writes every scene's ground-truth and prediction views side by side here as one
-            JPEG, building the labels the ground-truth view draws; None = no views, no labels.
+        visualization_dir: where to write each scene's ground-truth and prediction views as one JPEG; None skips
+            the views and the labels they draw.
+        nan_past_route_end: serve the target points past the route's end as NaN instead of failing the scene.
 
     Returns:
         the predicted trajectory of every scene, in the order the scenes were given.
@@ -133,6 +146,7 @@ def run_shard_inference(
             py123d_garage_feature_policy,
             cache_reader,
             build_labels=visualization_dir is not None,
+            nan_past_route_end=nan_past_route_end,
         ),
         batch_size=inference_batch_size,
         num_workers=max_workers,
@@ -178,8 +192,6 @@ def _save_scene_views(
     """
     Writes one JPEG per scene: the policy's ground-truth view left, its prediction view right.
 
-    Other views the policy renders are left out.
-
     Args:
         py123d_garage_policy: the policy that rendered the batch.
         features: the collated feature bundle of the batch.
@@ -212,7 +224,16 @@ def _save_scene_views(
 
 
 def _sample_at(bundle: BundleT, index: int) -> BundleT:
-    """One sample of a collated bundle, kept batched with a leading size of one."""
+    """
+    Slices one sample out of a collated bundle, kept batched with a leading size of one.
+
+    Args:
+        bundle: the collated bundle.
+        index: the sample's position in the batch.
+
+    Returns:
+        the bundle of that sample alone.
+    """
     return bundle.apply(lambda tensor: tensor[index : index + 1])
 
 
@@ -228,20 +249,47 @@ class OfflineEvaluationDataset(Dataset[SceneSample]):
         py123d_garage_policy: AnyPolicy,
         cache_reader: CacheStoreReader | None = None,
         build_labels: bool = False,
+        nan_past_route_end: bool = False,
     ) -> None:
+        """
+        Prepares the dataset over the given scenes.
+
+        Args:
+            scenes: the scenes to serve, one per index.
+            py123d_garage_policy: the policy whose features, labels and target points are built.
+            cache_reader: the feature cache to read from; None builds every feature from the scene.
+            build_labels: whether to also build labels, for the ground-truth views.
+            nan_past_route_end: serve the target points past the route's end as NaN instead of failing the scene.
+        """
         self._scenes = scenes
         self._policy = py123d_garage_policy
         self._cache_reader = cache_reader
         self._build_labels = build_labels
+        self._nan_past_route_end = nan_past_route_end
         self._target_point_distances_m: list[float] = (
             py123d_garage_policy.policy_config.required_target_point_distances_m
         )
 
     def __len__(self) -> int:
+        """
+        Counts the scenes.
+
+        Returns:
+            the number of scenes.
+        """
         return len(self._scenes)
 
     @override
     def __getitem__(self, index: int) -> SceneSample:
+        """
+        Builds one scene's sample.
+
+        Args:
+            index: the scene's position.
+
+        Returns:
+            the features, the labels or None, and the navigation conditioning.
+        """
         scene = self._scenes[index]
         cached: dict[str, Tensor] = {}
         if self._cache_reader is not None:
@@ -254,6 +302,7 @@ class OfflineEvaluationDataset(Dataset[SceneSample]):
         navigation = NavigationConditioning.from_scene(
             scene,
             self._target_point_distances_m,
+            self._nan_past_route_end,
         )
         return features, labels, navigation
 

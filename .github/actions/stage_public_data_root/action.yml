@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 name: stage_public_data_root
 description: >-
   Links the public nuplan slice sync_public_nuplan cached into a per-run data

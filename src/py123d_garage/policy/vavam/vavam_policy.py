@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 KE:SAI
 
+"""Evaluation-only policy that runs the released VaVAM video-action model."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -50,24 +52,32 @@ _COMMAND_STRAIGHT = 2
 
 _EVALUATION_ONLY = "VavamPolicy runs the released VaVAM checkpoint for evaluation only."
 
+# Member names inside the VaVAM zip bundle.
 _BUNDLE_VAM = "model.pt"
 _BUNDLE_TOKENIZER = "tokenizer.jit"
 
 
 @dataclasses.dataclass(frozen=True)
 class VavamFeatures(AbstractFeatures):
+    """Context camera frames VaVAM reads."""
+
     # Context frames normalized to [-1, 1], oldest first, newest last.
     frames: jt.Float[torch.Tensor, "*batch time 3 height width"]
 
 
 @dataclasses.dataclass(frozen=True)
 class VavamLabels(AbstractLabels):
+    """Logged future of the ego, used only for drawing."""
+
     # The logged future positions on the policy's trajectory grid, relative to the anchor.
     trajectory_xy: jt.Float[torch.Tensor, "*batch poses 2"]
 
 
 @dataclasses.dataclass(frozen=True)
 class VavamPredictions(AbstractPredictions):
+    """Waypoints VaVAM predicts."""
+
+    # The predicted future positions on the policy's trajectory grid, relative to the anchor.
     waypoints_xy: jt.Float[torch.Tensor, "*batch poses 2"]
 
     @property
@@ -85,8 +95,15 @@ class VavamPredictions(AbstractPredictions):
 
 
 class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
+    """Runs the released VaVAM checkpoint for evaluation; training is not supported."""
+
     def __init__(self, config: PolicyConfig):
-        """Initializes the VaVAM policy from its config block."""
+        """
+        Initializes the VaVAM policy from its config block.
+
+        Args:
+            config: policy config holding the vavam_config block.
+        """
         super().__init__()  # pyright: ignore[reportUnknownMemberType]
         assert config.vavam_config is not None, "the target names VavamPolicy but no vavam_config block is declared"
         self._config: VavamConfig = config.vavam_config
@@ -122,26 +139,32 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
     @property
     @override
     def policy_config(self) -> VavamConfig:
+        """Inherited, see superclass."""
         return self._config
 
     @override
     def initialize(self, evaluation_checkpoint_file: str | None = None) -> None:
         """
-        Routes the VaVAM bundle to build_model, which reads the architecture
-        from it; the base strict state-dict load does not apply.
+        Loads the VaVAM bundle, which carries its own architecture, instead of the base strict state-dict load.
 
         Args:
-            evaluation_checkpoint_file: the bundle built by scripts/pretrained/vavam.sh; required.
+            evaluation_checkpoint_file: path to the VaVAM zip bundle; required.
         """
         if evaluation_checkpoint_file is None:
             raise ValueError(
-                "This is inference-only VavamPolicy; requires policy_config.evaluation_checkpoint_file.",
+                "This is inference-only VavamPolicy; requires policy_config.evaluation_checkpoint_files.",
             )
         self._vavam_checkpoint_file = evaluation_checkpoint_file
         self.build_model(from_local_checkpoint=True)
 
     @override
     def build_model(self, from_local_checkpoint: bool) -> None:
+        """
+        Loads the video-action model and the tokenizer bytes from the bundle set by initialize.
+
+        Args:
+            from_local_checkpoint: unused; the bundle path always comes from initialize.
+        """
         del from_local_checkpoint
         assert self._vavam_checkpoint_file is not None, "initialize routes the VaVAM bundle here"
         with zipfile.ZipFile(self._vavam_checkpoint_file) as bundle:
@@ -161,8 +184,13 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
 
     def _tokenizer_on(self, device: torch.device) -> torch.jit.ScriptModule:
         """
-        The frozen jit's weights are graph constants, which Module.to() never
-        moves, so the tokenizer is jit-loaded directly onto the inference device.
+        Returns the tokenizer, jit-loaded onto the device because Module.to() never moves a frozen jit's constants.
+
+        Args:
+            device: device the tokenizer must run on.
+
+        Returns:
+            the frozen jit tokenizer on that device.
         """
         if self._tokenizer is None or self._tokenizer_device != device:
             self._tokenizer = cast(
@@ -179,8 +207,18 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
     def _rectified(
         self,
         metadata: BaseCameraMetadata,
-        image: npt.NDArray[np.uint8],
-    ) -> npt.NDArray[np.uint8]:
+        image: jt.UInt8[npt.NDArray[np.uint8], "height width 3"],
+    ) -> jt.UInt8[npt.NDArray[np.uint8], "height width 3"]:
+        """
+        Rectifies an f-theta camera image to a pinhole view; other cameras pass through.
+
+        Args:
+            metadata: metadata of the camera that took the image.
+            image: RGB camera image.
+
+        Returns:
+            the rectified image at the same resolution.
+        """
         if not isinstance(metadata, FThetaCameraMetadata):
             return image
         key = (
@@ -210,6 +248,7 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
         scene_api: SceneAPI,
         cached: dict[str, torch.Tensor],
     ) -> VavamFeatures:
+        """Stacks the rectified past context frames and the anchor frame, oldest first."""
         del cached
         config = self._config
         camera_id = config.input_camera[scene_api.scene_metadata.dataset]
@@ -245,18 +284,18 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
         scene_api: SceneAPI,
         cached: dict[str, torch.Tensor],
     ) -> VavamLabels:
-        """The logged future on the waypoint grid; drawn as ground truth, never trained on."""
+        """Samples the logged future on the waypoint grid, drawn as ground truth and never trained on."""
         del cached
         trajectory = sample_ego_xy(
             scene_api=scene_api,
-            num_steps=self._config.trajectory_num_steps,
-            interval_us=self._config.trajectory_interval_us,
+            offsets_us=self._config.trajectory_offsets_us,
             relative_to_anchor=True,
         )
         return VavamLabels(trajectory_xy=torch.tensor(trajectory.position_xy_array, dtype=torch.float32))
 
     @override
-    def _cache_specs(self) -> dict[str, CacheTensorSpec]:
+    def _permanent_cache_specs(self) -> dict[str, CacheTensorSpec]:
+        """Inherited, see superclass; VaVAM caches nothing."""
         return {}
 
     @override
@@ -265,7 +304,16 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
         features: VavamFeatures,
         navigation: NavigationConditioning,
     ) -> VavamPredictions:
-        """Tokenizes the context frames and denoises one trajectory per sample."""
+        """
+        Tokenizes the context frames and denoises one trajectory per sample.
+
+        Args:
+            features: batched context frames.
+            navigation: navigation conditioning; the lateral offset of the first target point picks the command.
+
+        Returns:
+            the predicted waypoints, optionally smoothed by the trajectory optimizer.
+        """
         config = self._config
         batch_size, context_length = features.frames.shape[0], features.frames.shape[1]
         device = features.frames.device
@@ -290,6 +338,15 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
         self,
         waypoints_xy: jt.Float[torch.Tensor, "*batch poses 2"],
     ) -> jt.Float[torch.Tensor, "*batch poses 2"]:
+        """
+        Smooths each sample's waypoints with the trajectory optimizer, keeping the raw ones where it fails.
+
+        Args:
+            waypoints_xy: predicted waypoints.
+
+        Returns:
+            the optimized waypoints with the input's dtype and device.
+        """
         assert self._trajectory_optimizer is not None
         assert self._vehicle_constraints is not None
         optimized = cast(
@@ -299,7 +356,7 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
         for index in range(optimized.shape[0]):
             result = self._trajectory_optimizer.optimize(  # pyright: ignore[reportUnknownMemberType]
                 trajectory=add_heading_to_trajectory(optimized[index]),
-                time_step=self._config.trajectory_interval_us / 1_000_000,
+                time_step=self._config.trajectory_offsets_us[0] / 1_000_000,
                 vehicle_constraints=self._vehicle_constraints,
             )
             if result.success:
@@ -313,10 +370,12 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
         labels: VavamLabels,
         predictions: VavamPredictions,
     ) -> dict[str, torch.Tensor]:
+        """Not supported; VaVAM is evaluation-only."""
         raise NotImplementedError(_EVALUATION_ONLY)
 
     @override
     def loss_weights(self, epoch: int) -> dict[str, float]:
+        """Not supported; VaVAM is evaluation-only."""
         raise NotImplementedError(_EVALUATION_ONLY)
 
     @override
@@ -355,8 +414,18 @@ class VavamPolicy(AbstractPolicy[VavamFeatures, VavamLabels, VavamPredictions]):
         return {"predictions": torch.from_numpy(image)}  # pyright: ignore[reportUnknownMemberType]
 
 
-def _first_sample(tensor: torch.Tensor) -> npt.NDArray[np.float32]:
-    """First sample of a batched tensor as a float32 numpy array."""
+def _first_sample(
+    tensor: jt.Float[torch.Tensor, " batch *rest"],
+) -> jt.Float32[npt.NDArray[np.float32], "*rest"]:
+    """
+    Converts the first sample of a batched tensor to a float32 numpy array.
+
+    Args:
+        tensor: batched tensor.
+
+    Returns:
+        the first sample as a float32 array.
+    """
     return cast(
         "npt.NDArray[np.float32]",
         tensor[0].detach().cpu().numpy().astype(np.float32),  # pyright: ignore[reportUnknownMemberType]

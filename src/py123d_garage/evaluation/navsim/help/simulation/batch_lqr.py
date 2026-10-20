@@ -26,45 +26,16 @@ class LateralStateIndex(IntEnum):
     """Index mapping for the lateral dynamics state vector."""
 
     LATERAL_ERROR = 0  # [m] The lateral error with respect to the planner centerline at the vehicle's rear axle center.
-    HEADING_ERROR = 1  # [rad] The heading error "".
+    HEADING_ERROR = 1  # [rad] The heading error with respect to the planner centerline.
     STEERING_ANGLE = 2  # [rad] The wheel angle relative to the longitudinal axis of the vehicle.
 
 
 class BatchLQRTracker:
     """
-    Implements an LQR tracker for a kinematic bicycle model.
+    Batch LQR tracker for a kinematic bicycle model, adapted from the nuplan-devkit.
 
-    Tracker operates on a batch of proposals. Implementation directly based on the nuplan-devkit
-    Link: https://github.com/motional/nuplan-devkit
-
-    We decouple into two subsystems, longitudinal and lateral, with small angle approximations for linearization.
-    We then solve two sequential LQR subproblems to find acceleration and steering rate inputs.
-
-    Longitudinal Subsystem:
-        States: [velocity]
-        Inputs: [acceleration]
-        Dynamics (continuous time):
-            velocity_dot = acceleration
-
-    Lateral Subsystem (After Linearization/Small Angle Approximation):
-        States: [lateral_error, heading_error, steering_angle]
-        Inputs: [steering_rate]
-        Parameters: [velocity, curvature]
-        Dynamics (continuous time):
-            lateral_error_dot  = velocity * heading_error
-            heading_error_dot  = velocity * (steering_angle / wheelbase_length - curvature)
-            steering_angle_dot = steering_rate
-
-    The continuous time dynamics are discretized using Euler integration and zero-order-hold on the input.
-    In case of a stopping reference, we use a simplified stopping P controller instead of LQR.
-
-    The final control inputs passed on to the motion model are:
-        - acceleration
-        - steering_rate
-
-    The tracker holds only static LQR/control configuration. Per-simulation context
-    (proposal trajectory, discretization time, vehicle geometry) and per-step inputs
-    (current iteration, initial states) are passed as method arguments.
+    Acceleration and steering rate come from two sequential LQR problems on the decoupled longitudinal
+    and small-angle linearized lateral dynamics; near a stop a P controller replaces LQR.
     """
 
     def __init__(
@@ -80,7 +51,7 @@ class BatchLQRTracker:
         stopping_velocity: float = 0.2,
     ):
         """
-        Constructor for LQR controller.
+        Sets up the LQR weights, the profile-fitting penalties and the stopping controller.
 
         Args:
             q_longitudinal: The weights for the Q matrix for the longitudinal subsystem.
@@ -93,29 +64,24 @@ class BatchLQRTracker:
             stopping_proportional_gain: The proportional_gain term for the P controller when coming to a stop.
             stopping_velocity: [m/s] The velocity below which we are deemed to be stopping and we don't use LQR.
         """
-        # Longitudinal LQR Parameters
         self._q_longitudinal: float = q_longitudinal
         self._r_longitudinal: float = r_longitudinal
 
-        # Lateral LQR Parameters
         assert len(q_lateral) == 3, "q_lateral should have 3 elements (lateral_error, heading_error, steering_angle)."
         assert len(r_lateral) == 1, "r_lateral should have 1 element (steering_rate)."
         self._q_lateral: npt.NDArray[np.float64] = np.diag(q_lateral)
         self._r_lateral: npt.NDArray[np.float64] = np.diag(r_lateral)
 
-        # Note we want a horizon > 1 so that steering rate actually can impact lateral/heading error in discrete time.
         assert tracking_horizon > 1, (
             "We expect the horizon to be greater than 1 - else steering_rate has no impact with Euler integration."
         )
         self._tracking_horizon = tracking_horizon
 
-        # Velocity/Curvature Estimation Parameters
         assert jerk_penalty > 0.0, "The jerk penalty must be positive."
         assert curvature_rate_penalty > 0.0, "The curvature rate penalty must be positive."
         self._jerk_penalty = jerk_penalty
         self._curvature_rate_penalty = curvature_rate_penalty
 
-        # Stopping Controller Parameters
         assert stopping_proportional_gain > 0, "stopping_proportional_gain has to be greater than 0."
         assert stopping_velocity > 0, "stopping_velocity has to be greater than 0."
         self._stopping_proportional_gain = stopping_proportional_gain
@@ -130,17 +96,14 @@ class BatchLQRTracker:
         jt.Float64[npt.NDArray[np.float64], "batch vels"],
     ]:
         """
-        Fit reference velocity and curvature profiles from a batch of proposal trajectories.
-
-        Intended to be called once per simulation; the returned arrays are then passed into
-        track_trajectory at each iteration.
+        Fits the reference velocity and curvature profiles of the proposals, once per simulation.
 
         Args:
-            proposal_states: array representation of proposals.
+            proposal_states: Proposal states to track.
             discretization_time: [s] The time interval used for discretizing the continuous time dynamics.
 
         Returns:
-            Tuple of (velocity_profile, curvature_profile).
+            The velocity and curvature profiles.
         """
         assert discretization_time > 0.0, "The discretization_time should be positive."
 
@@ -169,19 +132,19 @@ class BatchLQRTracker:
         ego_wheel_base: float,
     ) -> jt.Float64[npt.NDArray[np.float64], "batch 2"]:
         """
-        Calculates the command values given the proposals to track.
+        Computes the commands that track the proposals from the current ego states.
 
         Args:
-            time_idx: current time index.
-            initial_states: array representation of current ego states.
-            proposal_states: array representation of proposals.
-            velocity_profile: precomputed reference velocity profile (see compute_reference_profiles).
-            curvature_profile: precomputed reference curvature profile (see compute_reference_profiles).
+            time_idx: Current time index.
+            initial_states: Current ego states.
+            proposal_states: Proposal states to track.
+            velocity_profile: Reference velocity profile from compute_reference_profiles.
+            curvature_profile: Reference curvature profile from compute_reference_profiles.
             discretization_time: [s] The time interval used for discretizing the continuous time dynamics.
-            ego_wheel_base: The wheel base of the ego vehicle.
+            ego_wheel_base: [m] The wheel base of the ego vehicle.
 
         Returns:
-            command values for motion model.
+            The acceleration and steering rate command of each proposal.
         """
         assert discretization_time > 0.0, "The discretization_time should be positive."
 
@@ -193,7 +156,7 @@ class BatchLQRTracker:
             time_idx,
             initial_states,
             proposal_states,
-        )  # (batch), (batch, 3)
+        )
 
         (
             reference_velocities,
@@ -202,13 +165,11 @@ class BatchLQRTracker:
             time_idx,
             velocity_profile,
             curvature_profile,
-        )  # (batch), (batch, 10)
+        )
 
-        # create output arrays
         accel_cmds = np.zeros(batch_size, dtype=np.float64)
         steering_rate_cmds = np.zeros(batch_size, dtype=np.float64)
 
-        # 1. Stopping Controller
         should_stop_mask = np.logical_and(
             reference_velocities <= self._stopping_velocity,
             initial_velocity <= self._stopping_velocity,
@@ -220,7 +181,6 @@ class BatchLQRTracker:
         accel_cmds[should_stop_mask] = stopping_accel_cmd
         steering_rate_cmds[should_stop_mask] = stopping_steering_rate_cmd
 
-        # 2. Regular Controller
         accel_cmds[~should_stop_mask] = self._longitudinal_lqr_controller(
             initial_velocity[~should_stop_mask],
             reference_velocities[~should_stop_mask],
@@ -274,10 +234,8 @@ class BatchLQRTracker:
         Returns:
             Initial velocity [m/s] and initial lateral state.
         """
-        # Get initial trajectory state.
         initial_trajectory_values = proposal_states[:, time_idx]
 
-        # Determine initial error state.
         x_errors = initial_values[:, StateIndex.X] - initial_trajectory_values[:, StateIndex.X]
         y_errors = initial_values[:, StateIndex.Y] - initial_trajectory_values[:, StateIndex.Y]
         heading_references = initial_trajectory_values[:, StateIndex.HEADING]
@@ -289,7 +247,6 @@ class BatchLQRTracker:
             initial_values[:, StateIndex.HEADING] - heading_references,
         )
 
-        # Return initial velocity and lateral state vector.
         initial_velocities = initial_values[:, StateIndex.VELOCITY_X]
 
         initial_lateral_state_vector = np.stack(
@@ -313,9 +270,7 @@ class BatchLQRTracker:
         jt.Float64[npt.NDArray[np.float64], "batch horizon"],
     ]:
         """
-        Slice precomputed reference profiles to obtain the lookahead window for the current iteration.
-
-        Uses a lookahead time equal to ``self._tracking_horizon * discretization_time``.
+        Slices the reference profiles to the lookahead window of the current time index.
 
         Args:
             time_idx: Current time index.
@@ -351,7 +306,7 @@ class BatchLQRTracker:
         reference_velocities: jt.Float64[npt.NDArray[np.float64], " batch"],
     ) -> tuple[jt.Float64[npt.NDArray[np.float64], " batch"], float]:
         """
-        Apply proportional controller when at near-stop conditions.
+        Applies a proportional controller near a stop.
 
         Args:
             initial_velocities: [m/s] The current velocity of ego.
@@ -380,9 +335,7 @@ class BatchLQRTracker:
         Returns:
             Acceleration [m/s^2] command based on LQR.
         """
-        # We assume that we hold the acceleration constant for the entire tracking horizon.
-        # Given this, we can show the following where N = self._tracking_horizon and dt = discretization_time:
-        # velocity_N equals velocity_0 + (N * dt) * acceleration
+        # Constant acceleration over N horizon steps gives velocity_N = velocity_0 + N * dt * acceleration.
 
         batch_size = len(initial_velocities)
 
@@ -415,8 +368,6 @@ class BatchLQRTracker:
         """
         Determines a steering_rate input to minimize lateral errors at a lookahead time.
 
-        It requires a velocity sequence as a parameter to ensure linear time-varying lateral dynamics.
-
         Args:
             initial_lateral_state_vector: The current lateral state of ego.
             velocity_profile: [m/s] The velocity over the entire self._tracking_horizon-step lookahead.
@@ -439,9 +390,7 @@ class BatchLQRTracker:
         batch_dim = velocity_profile.shape[0]
         wheel_base = ego_wheel_base
 
-        # Set up the lateral LQR problem using the constituent linear time-varying (affine) system dynamics.
-        # Ultimately, we'll end up with the following problem structure where N = self._tracking_horizon:
-        # lateral_error_N equals A @ lateral_error_0 + B @ steering_rate + g
+        # Composing the N time-varying horizon steps gives state_N = A @ state_0 + B @ steering_rate + g.
         n_lateral_states = len(LateralStateIndex)
 
         identity: npt.NDArray[np.float64] = np.eye(
@@ -557,7 +506,7 @@ class BatchLQRTracker:
         """
         Uses LQR to find an optimal input to minimize tracking error in one step of dynamics.
 
-        The dynamics are next_state = A @ initial_state + B @ input + g and our target is the reference_state.
+        The dynamics are next_state = A @ initial_state + B @ input + g and the target state is zero.
 
         Args:
             initial_state: The current state.

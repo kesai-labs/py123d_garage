@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Drives one Alpasim scene through a public scripts/evaluation/alpasim script and checks the score and how far the ego drove.
-# Usage: eval_alpasim_scene.sh <checkpoint dir> <script name> <scene id> <output dir> <min score> <min meters>
-# DRIVE_TIMEOUT_S caps one attempt.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+# Drives one Alpasim scene through scripts/evaluation/alpasim_<track>.sh and checks the score and how far the ego drove.
+# Usage: eval_alpasim_scene.sh <checkpoint file> <scene id> <output dir> <min score> <min meters>
+# DRIVE_TIMEOUT_S caps one attempt. TRACK picks the track script, pai (default) or nuplan; the nuPlan track reads its MTGS
+# scenes under ALPASIM_NUPLAN_ROOT.
 
 set -euo pipefail
 
-_checkpoint_dir=$1
-_script=$2
-_scene_id=$3
-_out_dir=$4
-_min_score=$5
-_min_meters=$6
+_checkpoint_file=$1
+_scene_id=$2
+_out_dir=$3
+_min_score=$4
+_min_meters=$5
 _drive_timeout_s="${DRIVE_TIMEOUT_S:-1800}"
+_track="${TRACK:-pai}"
 _attempts=3
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
@@ -43,7 +47,7 @@ scores = {rollout["rollout_id"]: rollout["score"] for rollout in rollouts if rol
 def series(rows, name):
     return rows.filter(pl.col("name") == name).sort("timestamps_us")["values"].to_list()
 
-if scores:
+if scores and (aggregate / "metrics_unprocessed.parquet").exists():
     metrics = pl.read_parquet(aggregate / "metrics_unprocessed.parquet")
     drives = []
     for rollout_id, score in scores.items():
@@ -85,9 +89,9 @@ for _attempt in $(seq 1 "${_attempts}"); do
 		done
 	) &
 	_sampler_pid=$!
-	CHECKPOINT_FILE="${_checkpoint_dir}/model.pth" OUTPUT_DIR="${_attempt_dir}" SCENE_IDS="[${_scene_id}]" ALPASIM_DRIVER_PORT="${_port}" \
+	CHECKPOINT_FILE="${_checkpoint_file}" OUTPUT_DIR="${_attempt_dir}" SCENE_IDS="[${_scene_id}]" ALPASIM_DRIVER_PORT="${_port}" \
 		COMPOSE_PROJECT_NAME="${_project}-a${_attempt}" \
-		timeout "${_drive_timeout_s}" bash "scripts/evaluation/alpasim/${_script}" \
+		timeout "${_drive_timeout_s}" bash "scripts/evaluation/alpasim_${_track}.sh" \
 		wizard.baseport="${_baseport}" || echo "Drive exited with code $?"
 	kill "${_sampler_pid}" 2>/dev/null || true
 	_peak=$(awk 'BEGIN {gpu = 0; ram = 0} {if ($1 > gpu) gpu = $1; if ($2 > ram) ram = $2} END {printf "peak GPU %d MiB, RAM %d MiB", gpu, ram}' "${_attempt_dir}/memory_samples.txt")
@@ -106,7 +110,7 @@ fi
 read -r _score _meters <<<"${_drive}"
 echo "Scene ${_scene_id}: score ${_score}, minimum ${_min_score}; drove ${_meters} m, minimum ${_min_meters} m"
 if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
-	echo "### $(basename "${_checkpoint_dir}") on ${_scene_id}: score ${_score}, drove ${_meters} m, ${_peak}" >>"${GITHUB_STEP_SUMMARY}"
+	echo "### $(basename "$(dirname "${_checkpoint_file}")") on ${_scene_id}: score ${_score}, drove ${_meters} m, ${_peak}" >>"${GITHUB_STEP_SUMMARY}"
 fi
 python3 -c "import sys; sys.exit(0 if float('${_score}') >= float('${_min_score}') else 1)" ||
 	{ echo "the score is below the minimum" >&2; exit 1; }

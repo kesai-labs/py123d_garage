@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from typing import cast
 
 import cv2
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 from py123d.datatypes import FThetaCameraMetadata
@@ -20,7 +21,17 @@ _TANGENTIAL_INDICES = (2, 3)
 def _distortion_vector(
     radial: Sequence[float],
     tangential: Sequence[float],
-) -> npt.NDArray[np.float64]:
+) -> jt.Float64[npt.NDArray[np.float64], " 14"]:
+    """
+    Packs the distortion coefficients into OpenCV's 14-element layout.
+
+    Args:
+        radial: radial distortion coefficients.
+        tangential: tangential distortion coefficients.
+
+    Returns:
+        the OpenCV distortion vector.
+    """
     dist = np.zeros(14, dtype=np.float64)
     for index, value in zip(_RADIAL_INDICES, radial, strict=True):
         dist[index] = value
@@ -30,11 +41,23 @@ def _distortion_vector(
 
 
 def _undistorted_pixels(
-    pixels: npt.NDArray[np.float64],
+    pixels: jt.Float64[npt.NDArray[np.float64], "*grid 2"],
     focal: tuple[float, float],
     principal: tuple[float, float],
-    dist: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
+    dist: jt.Float64[npt.NDArray[np.float64], " 14"],
+) -> jt.Float64[npt.NDArray[np.float64], "points 2"]:
+    """
+    Removes the lens distortion from pixel coordinates of a pinhole camera.
+
+    Args:
+        pixels: distorted (x, y) pixel coordinates.
+        focal: focal lengths (fx, fy) in pixels.
+        principal: principal point (cx, cy) in pixels.
+        dist: OpenCV distortion vector.
+
+    Returns:
+        the undistorted pixel coordinates, flattened.
+    """
     fx, fy = focal
     cx, cy = principal
     camera_matrix = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=np.float64)
@@ -49,10 +72,24 @@ def _overscan_scale(
     resolution_wh: tuple[int, int],
     focal: tuple[float, float],
     principal: tuple[float, float],
-    dist: npt.NDArray[np.float64],
+    dist: jt.Float64[npt.NDArray[np.float64], " 14"],
     safety_margin_px: float,
     max_scale: float,
 ) -> float:
+    """
+    Computes how much to grow the canvas so the distorted image border stays inside it.
+
+    Args:
+        resolution_wh: image (width, height) in pixels.
+        focal: focal lengths (fx, fy) in pixels.
+        principal: principal point (cx, cy) in pixels.
+        dist: OpenCV distortion vector.
+        safety_margin_px: slack kept around the distorted border.
+        max_scale: largest scale allowed.
+
+    Returns:
+        the canvas scale, between 1 and max_scale.
+    """
     width, height = resolution_wh
     samples_x = np.linspace(0.0, width - 1.0, num=9, dtype=np.float64)
     samples_y = np.linspace(0.0, height - 1.0, num=9, dtype=np.float64)
@@ -74,7 +111,22 @@ def _ftheta_maps(
     focal: tuple[float, float],
     principal: tuple[float, float],
     canvas_wh: tuple[int, int],
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> tuple[
+    jt.Float32[npt.NDArray[np.float32], "canvas_height canvas_width"],
+    jt.Float32[npt.NDArray[np.float32], "canvas_height canvas_width"],
+]:
+    """
+    Builds the remap tables from an undistorted pinhole canvas into the f-theta image.
+
+    Args:
+        metadata: the f-theta camera the images come from.
+        focal: focal lengths (fx, fy) of the pinhole in pixels.
+        principal: principal point (cx, cy) of the pinhole on the canvas.
+        canvas_wh: canvas (width, height) in pixels.
+
+    Returns:
+        the x and y source pixel of every canvas pixel, -1 outside the f-theta image.
+    """
     intrinsics = metadata.intrinsics
     assert intrinsics is not None, f"camera {metadata.camera_name} carries no f-theta intrinsics."
     fx, fy = focal
@@ -111,9 +163,24 @@ def _ftheta_maps(
 def _distortion_maps(
     focal: tuple[float, float],
     principal: tuple[float, float],
-    dist: npt.NDArray[np.float64],
+    dist: jt.Float64[npt.NDArray[np.float64], " 14"],
     canvas_wh: tuple[int, int],
-) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+) -> tuple[
+    jt.Float32[npt.NDArray[np.float32], "canvas_height canvas_width"],
+    jt.Float32[npt.NDArray[np.float32], "canvas_height canvas_width"],
+]:
+    """
+    Builds the remap tables that apply the pinhole lens distortion to the undistorted canvas.
+
+    Args:
+        focal: focal lengths (fx, fy) in pixels.
+        principal: principal point (cx, cy) on the canvas.
+        dist: OpenCV distortion vector.
+        canvas_wh: canvas (width, height) in pixels.
+
+    Returns:
+        the x and y source pixel of every canvas pixel, -1 outside the canvas.
+    """
     canvas_w, canvas_h = canvas_wh
     grid_x, grid_y = np.meshgrid(
         np.arange(canvas_w, dtype=np.float64),
@@ -129,6 +196,8 @@ def _distortion_maps(
 
 
 class FThetaRectifier:
+    """Remaps images of an f-theta camera onto a distorted pinhole camera."""
+
     def __init__(
         self,
         metadata: FThetaCameraMetadata,
@@ -143,13 +212,13 @@ class FThetaRectifier:
         Builds the remap tables for one camera.
 
         Args:
-            metadata: the recorded f-theta camera the images come from
-            focal_length_px: focal length of the pinhole camera to rectify onto
-            principal_point_px: principal point (x, y) of that pinhole camera
-            radial: radial distortion coefficients to re-apply
-            tangential: tangential distortion coefficients to re-apply
-            max_overscan_scale: largest canvas growth allowed to keep the distorted border
-            safety_margin_px: slack kept around that border
+            metadata: the recorded f-theta camera the images come from.
+            focal_length_px: focal length of the pinhole camera to rectify onto.
+            principal_point_px: principal point (x, y) of that pinhole camera.
+            radial: radial distortion coefficients to re-apply.
+            tangential: tangential distortion coefficients to re-apply.
+            max_overscan_scale: largest canvas growth allowed to keep the distorted border.
+            safety_margin_px: slack kept around that border.
         """
         width, height = metadata.width, metadata.height
         focal = (focal_length_px, focal_length_px)
@@ -182,7 +251,19 @@ class FThetaRectifier:
         self._crop_yx = (margin_y, margin_x) if (canvas_w, canvas_h) != (width, height) else None
         self._resolution_hw = (height, width)
 
-    def rectify(self, image: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
+    def rectify(
+        self,
+        image: jt.UInt8[npt.NDArray[np.uint8], "height width *channels"],
+    ) -> jt.UInt8[npt.NDArray[np.uint8], "height width *channels"]:
+        """
+        Rectifies one image of the camera.
+
+        Args:
+            image: image of the f-theta camera.
+
+        Returns:
+            the image as the pinhole camera sees it, at the same resolution.
+        """
         rectified = cast(
             "npt.NDArray[np.uint8]",
             cv2.remap(

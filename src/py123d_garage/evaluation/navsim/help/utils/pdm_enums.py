@@ -27,22 +27,42 @@ class StateIndex(IntEnum):
 
     @classproperty
     def POINT(cls) -> slice:
-        # assumes X, Y have subsequent indices
+        """
+        Slice of the x and y entries, which must have adjacent indices.
+
+        Returns:
+            The slice into a state array.
+        """
         return slice(cls.X, cls.Y + 1)
 
     @classproperty
     def STATE_SE2(cls) -> slice:
-        # assumes X, Y, HEADING have subsequent indices
+        """
+        Slice of the x, y and heading entries, which must have adjacent indices.
+
+        Returns:
+            The slice into a state array.
+        """
         return slice(cls.X, cls.HEADING + 1)
 
     @classproperty
     def VELOCITY_2D(cls) -> slice:
-        # assumes velocity X, Y have subsequent indices
+        """
+        Slice of the x and y velocity entries, which must have adjacent indices.
+
+        Returns:
+            The slice into a state array.
+        """
         return slice(cls.VELOCITY_X, cls.VELOCITY_Y + 1)
 
     @classproperty
     def ACCELERATION_2D(cls) -> slice:
-        # assumes acceleration X, Y have subsequent indices
+        """
+        Slice of the x and y acceleration entries, which must have adjacent indices.
+
+        Returns:
+            The slice into a state array.
+        """
         return slice(cls.ACCELERATION_X, cls.ACCELERATION_Y + 1)
 
 

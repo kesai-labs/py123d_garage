@@ -24,15 +24,15 @@ def forward_integrate(
     sampling_time: Timestamp,
 ) -> jt.Float64[npt.NDArray[np.float64], " batch"]:
     """
-    Performs a simple euler integration.
+    Integrates one explicit Euler step.
 
     Args:
-        init: Initial state
-        delta: The rate of change of the state.
-        sampling_time: The time duration to propagate for.
+        init: Initial values.
+        delta: Rates of change of the values.
+        sampling_time: Time step.
 
     Returns:
-        The result of integration
+        The integrated values.
     """
     return init + delta * sampling_time.time_s
 
@@ -47,12 +47,12 @@ class BatchKinematicBicycleModel:
         steering_angle_time_constant: float = 0.05,
     ):
         """
-        Construct BatchKinematicBicycleModel.
+        Sets up the motion model.
 
         Args:
-            max_steering_angle: [rad] Maximum absolute value steering angle allowed by model.
-            accel_time_constant: low pass filter time constant for acceleration in s
-            steering_angle_time_constant: low pass filter time constant for steering angle in s
+            max_steering_angle: Maximum absolute steering angle, in radians.
+            accel_time_constant: Low-pass filter time constant of the acceleration, in seconds.
+            steering_angle_time_constant: Low-pass filter time constant of the steering angle, in seconds.
         """
         self._max_steering_angle = max_steering_angle
         self._accel_time_constant = accel_time_constant
@@ -64,14 +64,14 @@ class BatchKinematicBicycleModel:
         wheel_base: float,
     ) -> jt.Float64[npt.NDArray[np.float64], "batch 11"]:
         """
-        Calculates the rate of change of the state array representation.
+        Computes the time derivatives of the ego states.
 
         Args:
-            states: array describing the state of the ego-vehicle
-            wheel_base: The wheel base of the vehicle
+            states: Ego states.
+            wheel_base: Wheel base of the vehicle, in meters.
 
         Returns:
-            change rate across several state values
+            The time derivative of each state entry.
         """
         state_dots = np.zeros(states.shape, dtype=np.float64)
 
@@ -110,14 +110,13 @@ class BatchKinematicBicycleModel:
         Applies a first-order control delay (low-pass filter) to acceleration and steering.
 
         Args:
-            states: Ego state array
-            command_states: The desired dynamic state (controller commands) for propagation
-            sampling_time: The time duration to propagate for
+            states: Ego states.
+            command_states: Commanded acceleration and steering rate.
+            sampling_time: Time step.
 
         Returns:
-            propagating_state including updated dynamic_state
+            The ego states with the delayed acceleration and steering rate.
         """
-
         propagating_state: jt.Float64[
             npt.NDArray[np.float64],
             "batch 11",
@@ -152,18 +151,17 @@ class BatchKinematicBicycleModel:
         ego_metadata: EgoStateSE3Metadata,
     ) -> jt.Float64[npt.NDArray[np.float64], "batch 11"]:
         """
-        Propagates the ego state array forward with the motion model.
+        Propagates the ego states by one time step with the motion model.
 
         Args:
-            states: state array representation of the ego-vehicle
-            command_states: command array representation of controller
-            sampling_time: time delta to propagate as Timestamp
-            ego_metadata: Metadata for the ego state
+            states: Ego states.
+            command_states: Commanded acceleration and steering rate.
+            sampling_time: Time step.
+            ego_metadata: Ego metadata holding the wheel base.
 
         Returns:
-            updated state array representation of the ego-vehicle
+            The propagated ego states.
         """
-
         assert len(states) == len(command_states), "Batch size of states and command_states does not match!"
 
         wheel_base = ego_metadata.wheel_base
@@ -174,7 +172,6 @@ class BatchKinematicBicycleModel:
         )
         output_state = copy.deepcopy(states)
 
-        # Compute state derivatives
         state_dot = self.get_state_dot(propagating_state, wheel_base)
 
         output_state[:, StateIndex.X] = forward_integrate(
@@ -205,7 +202,6 @@ class BatchKinematicBicycleModel:
         # Lateral velocity is always zero in kinematic bicycle model
         output_state[:, StateIndex.VELOCITY_Y] = 0.0
 
-        # Integrate steering angle and clip to bounds
         output_state[:, StateIndex.STEERING_ANGLE] = np.clip(
             forward_integrate(
                 propagating_state[:, StateIndex.STEERING_ANGLE],

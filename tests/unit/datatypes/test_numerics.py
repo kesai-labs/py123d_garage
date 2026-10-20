@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """The constrained numeric aliases, as enforced by the runtime type checker."""
 
 from __future__ import annotations

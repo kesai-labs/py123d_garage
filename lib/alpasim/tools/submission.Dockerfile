@@ -25,18 +25,20 @@ RUN uv pip install --python /opt/venv/bin/python --no-deps /opt/py123d-garage
 COPY --from=wheels . /tmp/wheels
 RUN uv pip install --python /opt/venv/bin/python --find-links /tmp/wheels alpasim-grpc && rm -rf /tmp/wheels
 
-ARG CHECKPOINT_FILE
+ARG CHECKPOINT_FILES
 ARG SENSOR_RIG_FILE
-COPY --from=run ${CHECKPOINT_FILE} /opt/checkpoint/model.pth
-COPY --from=run config.yaml /opt/checkpoint/config.yaml
+COPY --from=run . /opt/checkpoint/
 COPY --from=rig ${SENSOR_RIG_FILE} /opt/checkpoint/sensor_rig.yaml
 
 ARG GIT_HASH=unknown
+# Driver settings baked into the image, e.g. "route_memory=true extrapolate_route=true"; empty keeps the defaults.
+ARG DRIVER_OVERRIDES=""
 ENV PY123D_GARAGE_CONFIG="\
 hydra.run.dir=/tmp/alpasim_driver \
-policy_config.evaluation_checkpoint_file=/opt/checkpoint/model.pth \
+policy_config.evaluation_checkpoint_files=${CHECKPOINT_FILES} \
 policy_config.evaluation_sensor_rig_file=/opt/checkpoint/sensor_rig.yaml \
-git_hash=${GIT_HASH}"
+git_hash=${GIT_HASH} \
+${DRIVER_OVERRIDES}"
 
 ENV HOME=/tmp MPLCONFIGDIR=/tmp/matplotlib OMP_NUM_THREADS=8
 ENTRYPOINT ["sh", "-c", "exec python -m py123d_garage.evaluation.alpasim.evaluate ${PY123D_GARAGE_CONFIG} host=\"${ALPASIM_DRIVER_HOST:-0.0.0.0}\" port=\"${ALPASIM_DRIVER_PORT:-6789}\" \"$@\"", "sh"]

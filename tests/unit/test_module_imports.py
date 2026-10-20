@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Import every package module: catches broken imports, layer typos, and hook breakage."""
 
 from __future__ import annotations
@@ -16,8 +19,8 @@ def test_every_module_imports() -> None:
             importlib.import_module(module_info.name)
         except ModuleNotFoundError as error:  # noqa: PERF203
             # The CARLA and AlpaSim evaluation modules import packages that only
-            # those simulators' runtimes provide.
-            if error.name not in ("carla", "leaderboard", "alpasim_driver", "alpasim_grpc"):
+            # those simulators' runtimes provide; the custom kernels need Triton.
+            if error.name not in ("carla", "leaderboard", "alpasim_driver", "alpasim_grpc", "triton"):
                 failures.append(f"{module_info.name}: {error!r}")
         except Exception as error:
             failures.append(f"{module_info.name}: {error!r}")

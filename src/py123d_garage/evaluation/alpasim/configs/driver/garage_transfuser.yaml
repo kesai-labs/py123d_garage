@@ -1,4 +1,6 @@
 # @package _global_
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
 
 driver:
   log_level: ${wizard.log_level}
@@ -14,9 +16,7 @@ driver:
 
   inference:
     use_cameras:
-      - "camera_cross_left_120fov"
       - "camera_front_wide_120fov"
-      - "camera_cross_right_120fov"
     max_batch_size: 16
     subsample_factor: 1
     context_length: 1
@@ -34,26 +34,25 @@ driver:
 
   plot_debug_images: false
 
+# The PAI challenge's simulation (+e2e_challenge=ec2): 100 ms steps, 1.7 s force-GT without driver calls, the route
+# served from 40 m ahead. The driver plans at 1.7, 2.2, 2.7 s, as on the challenge, but on 2 Hz frames of the one camera
+# the policy reads instead of the challenge's six 10 Hz cameras: the frames start 0.2 s after the render start (the
+# camera_timing patch of lib/alpasim/tools/patches), so one lands on every plan. The nuPlan track's challenge config
+# overrides these settings but the driver skip, which changes nothing there: its steps are the 500 ms plan steps.
 runtime:
   simulation_config:
-    control_timestep_us: 500_000
-    force_gt_duration_us: 2_000_000
+    control_timestep_us: 100_000
+    force_gt_duration_us: 1_700_000
+    skip_driver_during_force_gt: true
+    route_start_offset_m: 40.0
+    send_recording_ground_truth: false
 
     cameras:
       # NRE preserves the source aspect ratio; request 1900 wide, decoded width
       # is scene-dependent (1916 or 1920 at 1080 px height).
-      - logical_id: camera_cross_left_120fov
-        height: 1080
-        width: 1900
-        frame_interval_us: 500_000
-        shutter_duration_us: 30_000
       - logical_id: camera_front_wide_120fov
         height: 1080
         width: 1900
         frame_interval_us: 500_000
-        shutter_duration_us: 30_000
-      - logical_id: camera_cross_right_120fov
-        height: 1080
-        width: 1900
-        frame_interval_us: 500_000
+        first_frame_offset_us: 200_000
         shutter_duration_us: 30_000

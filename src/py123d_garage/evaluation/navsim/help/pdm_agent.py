@@ -67,15 +67,15 @@ class PDMAgent:
         route_correction: bool = True,
     ):
         """
-        Constructor for PDMAgent.
+        Sets up the planner and its observation, proposal, simulation and scoring modules.
 
         Args:
-            trajectory_grid: Sampling parameters for final trajectory
-            proposal_grid: Sampling parameters for proposals
-            idm_policies: BatchIDMPolicy class
-            lateral_offsets: centerline offsets for proposals (optional)
-            map_radius: radius around ego to consider
-            route_correction: whether to correct the route lane groups on the first iteration
+            trajectory_grid: Grid of the output trajectory, 8 s at 0.1 s if None.
+            proposal_grid: Grid of the proposals, 4 s at 0.1 s if None.
+            idm_policies: IDM policies of the proposals, the default policies if None.
+            lateral_offsets: Lateral centerline offsets of the proposals, in meters.
+            map_radius: Radius around ego of the map and observations, in meters.
+            route_correction: Whether to correct the route lane groups on the first iteration.
         """
         if trajectory_grid is None:
             trajectory_grid = TrajectoryGrid.from_num_poses_and_interval(
@@ -93,7 +93,6 @@ class PDMAgent:
             "PDMClosedPlanner: Proposals and Trajectory must have equal interval length!"
         )
 
-        # config parameters
         self._trajectory_grid: TrajectoryGrid = trajectory_grid
         self._proposal_grid: TrajectoryGrid = proposal_grid
         self._idm_policies: BatchIDMPolicy = idm_policies
@@ -101,14 +100,12 @@ class PDMAgent:
         self._map_radius: float = map_radius
         self._route_correction: bool = route_correction
 
-        # observation/forecasting class
         self._observation = PDMObservation(
             trajectory_grid,
             proposal_grid,
             map_radius,
         )
 
-        # proposal/trajectory related classes
         self._generator = PDMGenerator(
             trajectory_grid,
             proposal_grid,
@@ -132,8 +129,15 @@ class PDMAgent:
         self._iteration = 0
 
     def compute_trajectory(self, scene_api: SceneAPI) -> TrajectorySE2:
-        """Runs PDM-Closed planning for one scene; returns the trajectory in the absolute/global frame."""
+        """
+        Plans a trajectory with PDM-Closed for the first iteration of a scene.
 
+        Args:
+            scene_api: Scene to plan on.
+
+        Returns:
+            The planned trajectory in the absolute frame.
+        """
         ego_state_se3 = scene_api.get_ego_state_se3_at_iteration(0)
         box_detections_se3 = scene_api.get_box_detections_se3_at_iteration(0)
         traffic_light_detections = scene_api.get_traffic_light_detections_at_iteration(0)
@@ -144,8 +148,7 @@ class PDMAgent:
             assert self._route_lane_group_ids is not None, "Route lane group ids not found in Scene API."
 
             if len(self._route_lane_group_ids) == 0:
-                # No on-route lane groups available (no logged route and oracle inference found no
-                # path). Synthesize a follow-the-road route from ego's current lane group.
+                # Neither a logged nor an inferred route exists, so follow the road from ego's lane group.
                 assert ego_state_se3 is not None, "Ego state modality not found at iteration."
                 self._route_lane_group_ids = infer_follow_the_road_route(
                     ego_state_se3.ego_state_se2.rear_axle_se2,
@@ -188,7 +191,6 @@ class PDMAgent:
         ego_state_se2 = ego_state_se3.ego_state_se2
         box_detections_se2 = box_detections_se3.box_detections_se2
 
-        # Apply route correction on first iteration (ego_state required)
         if self._iteration == 0:
             assert self._map_api is not None, "Planner not initialized properly."
             assert self._route_lane_group_dict is not None, "Planner not initialized properly."
@@ -202,14 +204,12 @@ class PDMAgent:
         assert self._route_lane_group_dict is not None, "Route lane dicts not initialized."
         assert self._route_lane_dict is not None, "Route lane dicts not initialized."
 
-        # Update/Create drivable area polygon map
         self._drivable_area_map = build_drivable_area_occupancy_map(
             map_api=self._map_api,
             ego_state_se2=ego_state_se2,
             map_radius=self._map_radius,
         )
 
-        # 1. Environment forecast and observation update
         self._observation.update(
             ego_state_se2=ego_state_se2,
             box_detections_se2=box_detections_se2,
@@ -217,11 +217,8 @@ class PDMAgent:
             route_lane_dict=self._route_lane_dict,
         )
 
-        # TODO: Refactor the rest and re-integrate the following steps:
-        # 2. Centerline extraction and proposal update
         self._update_proposal_manager(ego_state_se2)
 
-        # 3. Generate/Unroll proposals
         assert self._proposal_manager is not None, "Proposal manager not initialized."
         proposals_array = self._generator.generate_proposals(
             ego_state_se2,
@@ -229,13 +226,11 @@ class PDMAgent:
             self._proposal_manager,
         )
 
-        # 4. Simulate proposals
         simulated_proposals_array = self._simulator.simulate_proposals(
             proposals_array,
             ego_state_se2,
         )
 
-        # 5. Score proposals
         assert self._centerline is not None, "Centerline not initialized."
         pdm_results = self._scorer.score_proposals(
             states=simulated_proposals_array,
@@ -259,10 +254,10 @@ class PDMAgent:
 
     def _update_proposal_manager(self, ego_state_se2: EgoStateSE2) -> None:
         """
-        Updates or initializes the PDMProposalManager.
+        Builds the proposal manager on the first iteration and updates its speed limit.
 
         Args:
-            ego_state_se2: state of ego-vehicle
+            ego_state_se2: Current ego state.
         """
         assert self._route_lane_dict is not None, "Planner not initialized properly."
         assert self._drivable_area_map is not None, "Planner not initialized properly."
@@ -291,6 +286,5 @@ class PDMAgent:
                 longitudinal_policies=self._idm_policies,
             )
 
-        # update proposals
         assert self._proposal_manager is not None, "Proposal manager not initialized."
         self._proposal_manager.update(current_lane.speed_limit_mps)

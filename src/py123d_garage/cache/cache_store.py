@@ -1,11 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
+"""Reads a built cache store and checks that it matches the caller's config."""
+
 from __future__ import annotations
 
+import ctypes
 import logging
+import math
 import os
+import shutil
 import typing
+import weakref
+from collections import OrderedDict
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import numpy as np
 
 from py123d_garage.cache._lmdb_backend import (
     open_log_read_env,
@@ -23,6 +36,28 @@ if TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 
 _MANIFEST_NAME = "manifest.yaml"
+_DATA_FILE_NAME = "data.mdb"
+# Open environments kept per process; reopening one costs ~1.3 ms per read, and 65530 mappings is the kernel limit.
+_MAX_OPEN_ENVS = 16_384
+# Most chunks one coverage check submits to its process pool; see check_covers.
+_MAX_SUBMITS = 256
+_PAGE_SIZE = os.sysconf("SC_PAGE_SIZE")
+_MADV_WILLNEED = 3
+_LIBC = ctypes.CDLL("libc.so.6", use_errno=True)
+
+
+def _advise_will_need(buffer: bytes | memoryview) -> None:
+    """
+    Start an asynchronous disk read of the mapped pages under a buffer.
+
+    LMDB maps its stores without readahead, so a cold record otherwise faults in one page at a time.
+
+    Args:
+        buffer: a zero-copy view into an LMDB map
+    """
+    address = np.frombuffer(buffer, dtype=np.uint8).ctypes.data
+    start = address - address % _PAGE_SIZE
+    _LIBC.madvise(ctypes.c_void_p(start), ctypes.c_size_t(address + len(buffer) - start), _MADV_WILLNEED)
 
 
 def read_manifest(cache_store_root: str | Path) -> dict[str, Any] | None:
@@ -64,7 +99,12 @@ def write_manifest(
 
 
 def delete_manifest(cache_store_root: str | Path) -> None:
-    """Unseal a store: readers refuse it until a finished build reseals it. Idempotent."""
+    """
+    Unseal a store so readers refuse it until a finished build reseals it.
+
+    Args:
+        cache_store_root: the store's root directory
+    """
     (Path(cache_store_root) / _MANIFEST_NAME).unlink(missing_ok=True)
 
 
@@ -75,11 +115,7 @@ def check_cache_signature(
     """
     Refuse a store that cannot serve the caller's cache_signature.
 
-    Every tensor of the caller's signature must be stored with the same
-    signature; tensors the store holds beyond those are ignored, so a store
-    built with more heads enabled serves any consumer of a subset of it. A
-    store with no manifest yet (never built) is not a mismatch; the caller is
-    about to build it.
+    Stored tensors beyond the caller's signature are ignored, and a store without a manifest passes.
 
     Args:
         manifest: the store's manifest, or None when it was never built
@@ -125,10 +161,7 @@ def check_builder_cache_signature(
     """
     Refuse to extend a store this build could not reseal faithfully.
 
-    The reader check accepts a store holding more tensors than the caller
-    needs, but a finishing builder reseals the manifest with only its own
-    tensors: building into a wider store would shrink its declaration and
-    refuse the wider consumers it still serves.
+    A finishing build reseals the manifest with only its own tensors, so it must not build into a wider store.
 
     Args:
         manifest: the store's manifest, or None when it was never built
@@ -155,30 +188,31 @@ def check_builder_cache_signature(
 
 class CacheStoreReader:
     """
-    Reads prebuilt sample tensors. Safe to hand to forked DataLoader workers.
+    Reads prebuilt sample tensors and is safe to hand to forked DataLoader workers.
 
-    LMDB environments are opened lazily per process and stripped when pickled, since
-    neither the memory map nor the file descriptor survives a fork.
+    LMDB environments open lazily per process; a pickled or forked copy starts without them, since py-lmdb must not use
+    an environment after a fork.
     """
 
     def __init__(
         self,
         cache_store_root: str | Path,
         cache_signature: dict[str, dict[str, str]],
+        mirror_root: str | Path | None = None,
     ) -> None:
         """
         Open a built store.
 
         Args:
             cache_store_root: the store's root directory
-            cache_signature: the caller's signature, checked against the store's;
-                its tensors are what read() serves — stored tensors beyond it
-                are left untouched
+            cache_signature: the caller's signature, whose tensors read() serves
+            mirror_root: node-local directory each log's data file is copied under on first read; None reads in place
 
         Raises:
             FileNotFoundError: if the store was never built
         """
         self._cache_store_root = Path(cache_store_root)
+        self._mirror_root = Path(mirror_root) if mirror_root is not None else None
         manifest = read_manifest(self._cache_store_root)
         if manifest is None:
             raise FileNotFoundError(
@@ -188,7 +222,7 @@ class CacheStoreReader:
         self.tensor_names: frozenset[str] = frozenset(
             manifest["tensors"],
         ) & frozenset(cache_signature)
-        self._envs: dict[str, lmdb.Environment] | None = None
+        self._envs: OrderedDict[str, lmdb.Environment] | None = None
 
     def read(
         self,
@@ -196,7 +230,7 @@ class CacheStoreReader:
         sample_key: str,
     ) -> dict[str, torch.Tensor]:
         """
-        Read one sample's tensor_names — the stored tensors the signature declares.
+        Read one sample's tensors named in tensor_names.
 
         Args:
             log_name: the log of the sample
@@ -208,15 +242,9 @@ class CacheStoreReader:
         Raises:
             KeyError: if the store does not hold every tensor for this sample
         """
-        if self._envs is None:
-            self._envs = {}
-        env = self._envs.get(log_name)
-        if env is None:
-            env = open_log_read_env(self._cache_store_root / log_name)
-            self._envs[log_name] = env
         tensors: dict[str, torch.Tensor] = {}
         missing: list[str] = []
-        with env.begin() as txn:
+        with self._env(log_name).begin() as txn:
             for name in self.tensor_names:
                 blob = txn.get(f"{sample_key}/{name}".encode())
                 if blob is None:
@@ -229,6 +257,88 @@ class CacheStoreReader:
                 f"under {self._cache_store_root}; rebuild it with py123d_garage.cache.build_cache.",
             )
         return tensors
+
+    def prefetch(
+        self,
+        samples: Sequence[tuple[str, str]],
+        executor: Executor,
+    ) -> None:
+        """
+        Ask the kernel to start reading samples' records from disk, so later read() calls find them in the page cache.
+
+        The record lookups run on the executor's threads, which also overlaps the B-tree page reads before each record.
+
+        Args:
+            samples: (log name, per-log sample key) of each sample
+            executor: the threads doing the lookups
+        """
+        envs = [self._env(log_name) for log_name, _ in samples]
+        list(executor.map(self._advise_sample, envs, [sample_key for _, sample_key in samples]))
+
+    def _advise_sample(self, env: lmdb.Environment, sample_key: str) -> None:
+        """
+        Look up one sample's records and ask the kernel to read their pages.
+
+        Args:
+            env: the sample's open log environment
+            sample_key: the per-log sample key
+        """
+        with env.begin(buffers=True) as txn:
+            for name in self.tensor_names:
+                blob = txn.get(f"{sample_key}/{name}".encode())
+                if blob is not None:
+                    _advise_will_need(blob)
+
+    def _env(self, log_name: str) -> lmdb.Environment:
+        """
+        The log's open environment, opening it and closing the least recently used one past the cap.
+
+        Args:
+            log_name: the log
+
+        Returns:
+            the open read-only environment
+        """
+        if self._envs is None:
+            self._envs = OrderedDict()
+            _OPEN_READERS.add(self)
+        env = self._envs.get(log_name)
+        if env is None:
+            env = open_log_read_env(self.log_dir(log_name))
+            self._envs[log_name] = env
+            if len(self._envs) > _MAX_OPEN_ENVS:
+                self._envs.popitem(last=False)[1].close()
+        else:
+            self._envs.move_to_end(log_name)
+        return env
+
+    def log_dir(self, log_name: str) -> Path:
+        """
+        Find a log's environment directory, copying it to the mirror root on first use.
+
+        Args:
+            log_name: the log to locate
+
+        Returns:
+            the log's directory in the store, or its local copy with a mirror root
+        """
+        log_dir = self._cache_store_root / log_name
+        if self._mirror_root is None:
+            return log_dir
+        mirror_dir = self._mirror_root / log_dir.absolute().relative_to("/")
+        data_file = mirror_dir / _DATA_FILE_NAME
+        if not data_file.exists():
+            import fcntl
+
+            mirror_dir.mkdir(parents=True, exist_ok=True)
+            # One worker copies each log under the lock; the rename keeps a half-written copy from ever being opened.
+            with (mirror_dir / ".copy.lock").open("w") as lock_file:
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
+                if not data_file.exists():
+                    partial_file = mirror_dir / f".{_DATA_FILE_NAME}.partial"
+                    shutil.copyfile(log_dir / _DATA_FILE_NAME, partial_file)
+                    partial_file.replace(data_file)
+        return mirror_dir
 
     def missing_sample_keys(
         self,
@@ -258,17 +368,14 @@ class CacheStoreReader:
         executor: Executor | None = None,
     ) -> None:
         """
-        Fails fast when the store does not hold every selected scene.
-
-        Grouping the scenes by log stays with the caller: training walks a lazy
-        scene sequence, evaluation a materialized list.
+        Fail fast when the store does not hold every selected scene.
 
         Args:
-            scene_uuids_by_log: the selected scene uuids, grouped by their log.
-            executor: scans the logs in parallel; None scans them serially.
+            scene_uuids_by_log: the selected scene uuids, grouped by their log
+            executor: scans the logs in parallel; None scans them serially
 
         Raises:
-            KeyError: if a log is missing any of its selected scenes.
+            KeyError: if a log is missing any of its selected scenes
         """
         num_scenes = sum(len(scene_uuids) for scene_uuids in scene_uuids_by_log.values())
         with log_stage(
@@ -281,11 +388,12 @@ class CacheStoreReader:
                     scene_uuids_by_log.values(),
                 )
             else:
+                # Thousands of submits can deadlock a Python 3.10 process pool (gh-105829), so cap the chunk count.
                 missing_per_log = executor.map(
                     self.missing_sample_keys,
                     scene_uuids_by_log.keys(),
                     scene_uuids_by_log.values(),
-                    chunksize=16,
+                    chunksize=max(16, math.ceil(len(scene_uuids_by_log) / _MAX_SUBMITS)),
                 )
             for log_index, ((log_name, scene_uuids), missing) in enumerate(
                 zip(scene_uuids_by_log.items(), missing_per_log, strict=True),
@@ -307,6 +415,32 @@ class CacheStoreReader:
         self._envs = None
 
     def __getstate__(self) -> dict[str, typing.Any]:
+        """
+        Pickle the reader without its open environments.
+
+        Returns:
+            the reader's attributes with the environments dropped
+        """
         state = self.__dict__.copy()
         state["_envs"] = None
         return state
+
+
+# The readers of this process with open environments, which a forked child closes before its first read.
+_OPEN_READERS: weakref.WeakSet[CacheStoreReader] = weakref.WeakSet()
+
+
+def _close_inherited_envs() -> None:
+    """
+    Close the environments a forked child inherited from its parent.
+
+    py-lmdb frees a transaction of an inherited environment without unlinking it from the environment's dependents, so
+    every later transaction on it, and closing it, writes through a dangling pointer; the heap corruption surfaces as
+    "Attempt to operate on closed/deleted/dropped object" on a live environment or as a crashed worker.
+    """
+    for reader in list(_OPEN_READERS):
+        reader.close()
+    _OPEN_READERS.clear()
+
+
+os.register_at_fork(after_in_child=_close_inherited_envs)

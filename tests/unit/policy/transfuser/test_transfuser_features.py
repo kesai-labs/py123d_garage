@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """TransFuser input features: the LiDAR BEV histogram, camera stitching and ego status."""
 
 from __future__ import annotations
@@ -8,21 +11,25 @@ from typing import Literal, cast
 
 import numpy as np
 import numpy.typing as npt
+import pytest
 import torch
 from py123d.api import SceneAPI
 from py123d.datatypes import CameraID, LidarID, Timestamp
+from py123d.datatypes.vehicle_state.dynamic_state import DynamicStateSE3
 from py123d.datatypes.vehicle_state.ego_state import EgoStateSE3
 from py123d.datatypes.vehicle_state.ego_state_metadata import (
     EgoStateSE3Metadata,
 )
-from py123d.geometry import PoseSE2
+from py123d.geometry import PoseSE2, Vector3D
 from py123d.geometry.pose import PoseSE3
 
+from py123d_garage.api.abstract_policy_config import uniform_offsets_us
 from py123d_garage.config.schema.policy.transfuser_config import (
     CameraConfig,
     LidarConfig,
     TransfuserConfig,
 )
+from py123d_garage.policy.transfuser import features as features_module
 from py123d_garage.policy.transfuser.features import (
     build_camera_feature,
     build_lidar_feature,
@@ -161,8 +168,10 @@ class _StatusScene:
         iteration: int,
     ) -> SimpleNamespace:
         return SimpleNamespace(
-            dynamic_state_se3=SimpleNamespace(
-                velocity_2d=SimpleNamespace(array=self._velocity_2d),
+            dynamic_state_se3=DynamicStateSE3(
+                velocity=Vector3D(x=self._velocity_2d[0], y=self._velocity_2d[1], z=0.0),
+                acceleration=Vector3D(x=0.0, y=0.0, z=0.0),
+                angular_velocity=Vector3D(x=0.0, y=0.0, z=0.0),
             ),
         )
 
@@ -184,8 +193,7 @@ _SWEEP_INTERVAL_US = 100_000
 
 def _anchor_only_config() -> TransfuserConfig:
     return TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
         lidar_config=LidarConfig(remove_lidar_ground_points=False),
     )
@@ -242,8 +250,7 @@ def test_lidar_raster_drops_points_outside_extents_and_heights() -> None:
 def test_camera_features_stitch_left_to_right() -> None:
     """input_cameras order is the stitch order: left, front, right thirds of the image."""
     config = TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
         camera_config=CameraConfig(
             input_cameras={"nuplan": [CameraID.PCAM_L0, CameraID.PCAM_F0, CameraID.PCAM_R0]},
@@ -260,7 +267,7 @@ def test_camera_features_stitch_left_to_right() -> None:
     }
     feature = build_camera_feature(_as_scene(_CameraScene(images)), config)
     assert feature.shape == (3, 256, 1024)
-    assert feature.dtype == torch.float32
+    assert feature.dtype == torch.uint8
     for value, col in zip(values, (100, 512, 900), strict=True):
         assert torch.all(feature[:, :, col] == float(value))
 
@@ -268,9 +275,37 @@ def test_camera_features_stitch_left_to_right() -> None:
 def test_velocity_is_speed_norm() -> None:
     scene = _StatusScene(np.array([3.0, 4.0]))
     config = TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
     )
     velocity = build_velocity(_as_scene(scene), config)
     assert torch.equal(velocity, torch.tensor([5.0]))
+
+
+def test_past_camera_rows_stack_oldest_on_top_and_repeat_the_oldest_frame(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rows 1 s, 0.5 s and 0 s back top to bottom; a row before the rollout began repeats the oldest frame there is."""
+    config = TransfuserConfig(
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
+        required_target_point_distances_m=[45.0],
+        camera_config=CameraConfig(
+            input_cameras={"nuplan": [CameraID.PCAM_F0]},
+            image_width=64,
+            image_height=96,
+            past_camera_offset_us=500_000,
+            num_past_camera_rows=2,
+        ),
+    )
+    anchor = {CameraID.PCAM_F0: np.full((32, 64, 3), 30, dtype=np.uint8)}
+
+    def frame(value: int) -> SimpleNamespace:
+        return SimpleNamespace(image=np.full((32, 64, 3), value, dtype=np.uint8), metadata=None, timestamp=None)
+
+    def stitched(past: list[SimpleNamespace | None]) -> list[int]:
+        monkeypatch.setattr(features_module, "sample_past_camera", lambda *_, **__: past)
+        feature = build_camera_feature(_as_scene(_CameraScene(anchor)), config)
+        assert feature.shape == (3, 96, 64)
+        return [int(feature[0, row * 32 + 16, 32]) for row in range(3)]
+
+    assert stitched([frame(20), frame(10)]) == [10, 20, 30]
+    assert stitched([frame(20), None]) == [20, 20, 30]
+    assert stitched([None, None]) == [30, 30, 30]

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """The beartype+jaxtyping import hook: installed when enabled, and actually checking."""
 
 from __future__ import annotations

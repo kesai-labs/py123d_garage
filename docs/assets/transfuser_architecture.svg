@@ -1,0 +1,568 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 650" width="1600" height="650">
+  <defs>
+    <marker id="m" orient="auto-start-reverse" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#9a9a9a" />
+    </marker>
+    <marker id="mb" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#141414" />
+    </marker>
+    <marker id="mo" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#e5a300" />
+    </marker>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d6d4cf" />
+      <stop offset="0.45" stop-color="#efede8" />
+    </linearGradient>
+    <pattern id="grid8" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#141414" stroke-opacity="0.35" stroke-width="1.5" />
+    </pattern>
+  </defs>
+  <rect x="0.0" y="0.0" width="1600.0" height="650.0" rx="24" fill="#f5f3ee" stroke="none" stroke-width="0" />
+  <rect x="40.0" y="40.0" width="380.0" height="270.0" rx="12" fill="#fbfaf7" stroke="#d8d2c6" stroke-width="2" />
+  <text x="62.0" y="78.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#141414" text-anchor="start">Camera</text>
+  <g opacity="0.5">
+    <clipPath id="cpast">
+      <rect x="66" y="100" width="240" height="134" rx="10" />
+    </clipPath>
+    <g clip-path="url(#cpast)">
+      <rect x="66.0" y="100.0" width="240.0" height="134.0" rx="0" fill="#e8e6e1" stroke="none" stroke-width="0" />
+      <rect x="70.8" y="140.2" width="24.0" height="29.5" rx="0" fill="#c6c4bf" stroke="none" stroke-width="0" />
+      <rect x="97.2" y="129.5" width="16.8" height="40.2" rx="0" fill="#d3d1cc" stroke="none" stroke-width="0" />
+      <rect x="116.4" y="146.9" width="21.6" height="22.8" rx="0" fill="#c6c4bf" stroke="none" stroke-width="0" />
+      <rect x="224.4" y="134.8" width="19.2" height="34.8" rx="0" fill="#d3d1cc" stroke="none" stroke-width="0" />
+      <rect x="246.0" y="145.6" width="26.4" height="24.1" rx="0" fill="#c6c4bf" stroke="none" stroke-width="0" />
+      <rect x="277.2" y="126.8" width="24.0" height="42.9" rx="0" fill="#d3d1cc" stroke="none" stroke-width="0" />
+      <rect x="66.0" y="169.7" width="240.0" height="64.3" rx="0" fill="#d9d6cb" stroke="none" stroke-width="0" />
+      <path d="M178.8 169.7 L193.2 169.7 L301.2 234.0 L70.8 234.0 Z" fill="#8f8f8f" />
+      <path d="M179.8 169.7 L80.4 234.0" stroke="#fbfaf7" stroke-width="2.2" fill="none" />
+      <path d="M192.2 169.7 L291.6 234.0" stroke="#fbfaf7" stroke-width="2.2" fill="none" />
+      <path d="M186.0 172.7 L186.0 234.0" stroke="#fbfaf7" stroke-width="2.2" stroke-dasharray="7 7" fill="none" />
+      <ellipse cx="169.2" cy="195.1" rx="15.6" ry="1.6" fill="#000" opacity="0.18" />
+      <path d="M159.5 186.6 L161.7 180.9 L176.7 180.9 L178.9 186.6 Z" fill="#3d3d3d" />
+      <rect x="155.8" y="186.0" width="26.9" height="8.5" rx="4" fill="#ffbe27" stroke="none" stroke-width="0" />
+      <rect x="157.4" y="187.8" width="4.3" height="2.0" rx="2" fill="#8E2414" stroke="none" stroke-width="0" />
+      <rect x="176.7" y="187.8" width="4.3" height="2.0" rx="2" fill="#8E2414" stroke="none" stroke-width="0" />
+    </g>
+    <rect x="66.0" y="100.0" width="240.0" height="134.0" rx="10" fill="none" stroke="#9a9a9a" stroke-width="2" />
+  </g>
+  <g opacity="1.0">
+    <clipPath id="cnow">
+      <rect x="140" y="148" width="256" height="144" rx="10" />
+    </clipPath>
+    <g clip-path="url(#cnow)">
+      <rect x="140.0" y="148.0" width="256.0" height="144.0" rx="0" fill="#e8e6e1" stroke="none" stroke-width="0" />
+      <rect x="145.1" y="191.2" width="25.6" height="31.7" rx="0" fill="#c6c4bf" stroke="none" stroke-width="0" />
+      <rect x="173.3" y="179.7" width="17.9" height="43.2" rx="0" fill="#d3d1cc" stroke="none" stroke-width="0" />
+      <rect x="193.8" y="198.4" width="23.0" height="24.5" rx="0" fill="#c6c4bf" stroke="none" stroke-width="0" />
+      <rect x="309.0" y="185.4" width="20.5" height="37.4" rx="0" fill="#d3d1cc" stroke="none" stroke-width="0" />
+      <rect x="332.0" y="197.0" width="28.2" height="25.9" rx="0" fill="#c6c4bf" stroke="none" stroke-width="0" />
+      <rect x="365.3" y="176.8" width="25.6" height="46.1" rx="0" fill="#d3d1cc" stroke="none" stroke-width="0" />
+      <rect x="140.0" y="222.9" width="256.0" height="69.1" rx="0" fill="#d9d6cb" stroke="none" stroke-width="0" />
+      <path d="M260.3 222.9 L275.7 222.9 L390.9 292.0 L145.1 292.0 Z" fill="#8f8f8f" />
+      <path d="M261.3 222.9 L155.4 292.0" stroke="#fbfaf7" stroke-width="2.2" fill="none" />
+      <path d="M274.7 222.9 L380.6 292.0" stroke="#fbfaf7" stroke-width="2.2" fill="none" />
+      <path d="M268.0 225.9 L268.0 292.0" stroke="#fbfaf7" stroke-width="2.2" stroke-dasharray="7 7" fill="none" />
+      <ellipse cx="250.1" cy="267.8" rx="27.3" ry="2.8" fill="#000" opacity="0.18" />
+      <path d="M233.1 252.8 L236.9 242.7 L263.3 242.7 L267.0 252.8 Z" fill="#3d3d3d" />
+      <rect x="226.5" y="251.7" width="47.1" height="15.1" rx="4" fill="#ffbe27" stroke="none" stroke-width="0" />
+      <rect x="229.4" y="254.9" width="7.5" height="3.4" rx="2" fill="#8E2414" stroke="none" stroke-width="0" />
+      <rect x="263.3" y="254.9" width="7.5" height="3.4" rx="2" fill="#8E2414" stroke="none" stroke-width="0" />
+    </g>
+    <rect x="140.0" y="148.0" width="256.0" height="144.0" rx="10" fill="none" stroke="#141414" stroke-width="2" />
+  </g>
+  <rect x="78.0" y="110.0" width="56.0" height="26.0" rx="13" fill="#9a9a9a" stroke="none" stroke-width="0" />
+  <text x="106.0" y="128.5" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="600" fill="#f5f3ee" text-anchor="middle">−1 s</text>
+  <rect x="338.5" y="256.0" width="45.5" height="26.0" rx="13" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <text x="361.2" y="274.5" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="600" fill="#141414" text-anchor="middle">Now</text>
+  <rect x="40.0" y="330.0" width="380.0" height="280.0" rx="12" fill="#fbfaf7" stroke="#d8d2c6" stroke-width="2" />
+  <text x="62.0" y="368.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#141414" text-anchor="start">BEV input</text>
+  <rect x="70.0" y="390.0" width="150.0" height="150.0" rx="10" fill="#141414" stroke="none" stroke-width="0" />
+  <circle cx="162.2" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="162.0" cy="501.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="161.1" cy="504.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="159.7" cy="506.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="157.7" cy="509.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="155.4" cy="511.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="152.7" cy="513.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="149.7" cy="514.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="146.6" cy="514.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="143.4" cy="514.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="140.3" cy="514.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="137.3" cy="513.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="134.6" cy="511.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="132.3" cy="509.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="130.3" cy="506.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="128.9" cy="504.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="128.0" cy="501.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="127.8" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="128.0" cy="494.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="128.9" cy="491.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="130.3" cy="489.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="132.3" cy="486.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="134.6" cy="484.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="137.3" cy="482.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="140.3" cy="481.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="143.4" cy="481.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="146.6" cy="481.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="149.7" cy="481.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="152.7" cy="482.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="155.4" cy="484.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="157.7" cy="486.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="159.7" cy="489.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="161.1" cy="491.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="162.0" cy="494.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="170.5" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="170.2" cy="501.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="169.3" cy="505.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="167.7" cy="509.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="165.6" cy="512.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="163.0" cy="515.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="160.0" cy="518.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="156.6" cy="520.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="152.9" cy="521.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="149.0" cy="522.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="145.0" cy="523.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="141.0" cy="522.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="137.1" cy="521.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="133.4" cy="520.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="130.0" cy="518.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="127.0" cy="515.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="124.4" cy="512.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="122.3" cy="509.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="120.7" cy="505.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="119.8" cy="501.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="119.5" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="119.8" cy="494.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="120.7" cy="490.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="122.3" cy="486.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="124.4" cy="483.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="127.0" cy="480.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="130.0" cy="477.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="133.4" cy="475.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="137.1" cy="474.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="141.0" cy="473.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="145.0" cy="473.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="149.0" cy="473.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="152.9" cy="474.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="156.6" cy="475.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="160.0" cy="477.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="163.0" cy="480.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="165.6" cy="483.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="167.7" cy="486.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="169.3" cy="490.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="170.2" cy="494.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="178.8" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="178.4" cy="502.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="177.5" cy="506.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="176.0" cy="511.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="173.8" cy="515.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="171.2" cy="518.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="168.0" cy="522.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="164.5" cy="525.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="160.5" cy="527.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="156.3" cy="529.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="151.9" cy="530.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="147.3" cy="531.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="142.7" cy="531.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="138.1" cy="530.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="133.7" cy="529.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="129.5" cy="527.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="125.5" cy="525.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="122.0" cy="522.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="118.8" cy="518.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="116.2" cy="515.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="114.0" cy="511.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="112.5" cy="506.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="111.6" cy="502.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="111.2" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="111.6" cy="493.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="112.5" cy="489.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="114.0" cy="484.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="116.2" cy="480.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="118.8" cy="477.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="122.0" cy="473.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="125.5" cy="471.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="129.5" cy="468.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="133.7" cy="466.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="138.1" cy="465.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="142.7" cy="465.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="147.3" cy="465.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="151.9" cy="465.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="156.3" cy="466.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="160.5" cy="468.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="164.5" cy="471.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="168.0" cy="473.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="171.2" cy="477.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="173.8" cy="480.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="176.0" cy="484.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="177.5" cy="489.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="178.4" cy="493.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="187.0" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="186.7" cy="503.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="185.8" cy="507.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="184.3" cy="512.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="182.2" cy="517.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="179.6" cy="521.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="176.4" cy="525.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="172.9" cy="528.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="168.9" cy="531.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="164.5" cy="534.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="125.5" cy="534.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="121.1" cy="531.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="117.1" cy="528.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="113.6" cy="525.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="110.4" cy="521.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="107.8" cy="517.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="105.7" cy="512.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="104.2" cy="507.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="103.3" cy="503.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="103.0" cy="498.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="103.3" cy="493.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="104.2" cy="488.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="105.7" cy="483.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="107.8" cy="478.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="110.4" cy="474.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="113.6" cy="470.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="117.1" cy="467.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="121.1" cy="464.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="125.5" cy="461.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="130.1" cy="459.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="134.9" cy="458.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="139.9" cy="457.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="145.0" cy="456.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="150.1" cy="457.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="155.1" cy="458.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="159.9" cy="459.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="164.5" cy="461.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="168.9" cy="464.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="172.9" cy="467.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="176.4" cy="470.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="179.6" cy="474.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="182.2" cy="478.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="184.3" cy="483.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="185.8" cy="488.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="186.7" cy="493.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="188.1" cy="523.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="185.0" cy="527.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="181.5" cy="531.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="177.5" cy="535.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="112.5" cy="535.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="108.5" cy="531.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="105.0" cy="527.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="101.9" cy="523.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="101.9" cy="472.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="105.0" cy="468.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="108.5" cy="464.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="112.5" cy="460.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="116.8" cy="457.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="121.5" cy="454.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="126.4" cy="452.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="131.6" cy="450.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="136.9" cy="449.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="142.3" cy="448.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="147.7" cy="448.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="153.1" cy="449.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="158.4" cy="450.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="163.6" cy="452.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="168.5" cy="454.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="173.2" cy="457.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="177.5" cy="460.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="181.5" cy="464.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="185.0" cy="468.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="188.1" cy="472.6" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="103.6" cy="457.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="107.9" cy="453.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="112.5" cy="450.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="117.4" cy="447.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="122.6" cy="445.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="128.0" cy="443.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="133.6" cy="441.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="139.3" cy="440.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="145.0" cy="440.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="150.7" cy="440.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="156.4" cy="441.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="162.0" cy="443.1" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="167.4" cy="445.0" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="172.6" cy="447.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="177.5" cy="450.3" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="182.1" cy="453.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="186.4" cy="457.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="103.4" cy="446.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="108.2" cy="443.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="113.4" cy="440.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="118.8" cy="437.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="124.4" cy="435.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="130.1" cy="434.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="136.0" cy="433.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="142.0" cy="432.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="148.0" cy="432.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="154.0" cy="433.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="159.9" cy="434.2" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="165.6" cy="435.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="171.2" cy="437.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="176.6" cy="440.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="181.8" cy="443.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="186.6" cy="446.9" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="104.0" cy="436.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="109.3" cy="433.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="114.9" cy="430.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="120.6" cy="428.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="126.6" cy="426.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="132.7" cy="425.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="138.8" cy="424.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="145.0" cy="424.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="151.2" cy="424.8" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="157.3" cy="425.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="163.4" cy="426.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="169.4" cy="428.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="175.1" cy="430.7" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="180.7" cy="433.4" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="186.0" cy="436.5" r="0.9" fill="#c4c4c4" opacity="0.45" />
+  <circle cx="90.2" cy="396.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.1" cy="399.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.6" cy="402.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.3" cy="405.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.4" cy="408.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="89.7" cy="411.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="89.5" cy="414.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.0" cy="417.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.3" cy="420.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.2" cy="423.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.5" cy="426.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.9" cy="429.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.0" cy="432.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.9" cy="435.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.4" cy="438.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.0" cy="441.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.4" cy="444.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.1" cy="447.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.1" cy="450.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.7" cy="453.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.5" cy="456.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="89.7" cy="459.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.8" cy="462.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.3" cy="465.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.4" cy="468.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="89.6" cy="471.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.1" cy="474.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.9" cy="477.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.7" cy="480.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.1" cy="483.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.6" cy="486.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.3" cy="489.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.7" cy="492.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.9" cy="495.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.8" cy="498.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.3" cy="501.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.1" cy="504.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="89.8" cy="507.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="89.9" cy="510.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.2" cy="513.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="92.4" cy="516.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.8" cy="519.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.4" cy="522.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.4" cy="525.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="91.0" cy="528.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="90.7" cy="531.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="108.1" cy="418.2" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="109.5" cy="422.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="110.1" cy="423.0" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.1" cy="423.9" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="110.0" cy="412.3" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.2" cy="423.5" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.4" cy="418.0" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="110.3" cy="413.0" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.0" cy="418.0" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="107.7" cy="446.9" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.1" cy="459.9" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="106.5" cy="457.2" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="108.5" cy="448.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="107.8" cy="456.8" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.2" cy="446.6" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="109.7" cy="446.6" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="110.3" cy="450.6" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.3" cy="459.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="109.0" cy="526.0" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="107.9" cy="513.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="109.6" cy="512.4" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="107.2" cy="517.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="109.7" cy="514.2" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="106.3" cy="524.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="107.9" cy="525.4" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="111.4" cy="517.3" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="108.8" cy="519.3" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="199.4" cy="396.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.3" cy="399.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.2" cy="402.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.4" cy="405.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="200.3" cy="408.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.0" cy="411.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.8" cy="414.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.7" cy="417.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.2" cy="420.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.4" cy="423.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="200.4" cy="426.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.1" cy="429.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.1" cy="432.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="197.5" cy="435.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.7" cy="438.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.2" cy="441.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="197.6" cy="444.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.3" cy="447.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.4" cy="450.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="197.7" cy="453.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.4" cy="456.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.9" cy="459.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.5" cy="462.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.6" cy="465.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.6" cy="468.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.7" cy="471.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="197.6" cy="474.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="197.7" cy="477.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.5" cy="480.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="200.4" cy="483.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.3" cy="486.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.9" cy="489.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.3" cy="492.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.5" cy="495.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.6" cy="498.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.4" cy="501.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.6" cy="504.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.3" cy="507.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.4" cy="510.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.6" cy="513.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.8" cy="516.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="197.6" cy="519.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.2" cy="522.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="199.7" cy="525.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.4" cy="528.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="198.2" cy="531.0" r="1.2" fill="#c4c4c4" opacity="0.95" />
+  <circle cx="182.8" cy="413.3" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="179.1" cy="416.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="182.2" cy="411.4" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="179.9" cy="414.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="183.0" cy="416.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="183.1" cy="412.4" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="180.0" cy="419.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="183.3" cy="416.3" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="179.4" cy="411.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="181.2" cy="448.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="182.8" cy="457.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="179.1" cy="449.9" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="182.8" cy="455.0" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="182.8" cy="450.8" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="178.8" cy="450.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="182.8" cy="449.8" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="180.1" cy="451.8" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="180.5" cy="451.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="183.5" cy="514.2" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="178.0" cy="525.2" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="183.3" cy="525.8" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="180.6" cy="525.3" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="183.6" cy="515.1" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="182.5" cy="523.7" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="182.0" cy="519.3" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="179.7" cy="516.8" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="179.4" cy="513.0" r="1.1" fill="#c4c4c4" opacity="0.9" />
+  <circle cx="145.9" cy="434.1" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="148.1" cy="433.2" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="149.0" cy="435.8" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="149.2" cy="436.6" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="149.0" cy="435.3" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="140.1" cy="436.0" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="141.7" cy="434.2" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="146.6" cy="435.1" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="144.1" cy="436.8" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="146.1" cy="434.4" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="142.5" cy="436.4" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="144.8" cy="436.1" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="143.5" cy="433.8" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <circle cx="145.3" cy="436.3" r="1.2" fill="#c4c4c4" opacity="1.0" />
+  <rect x="141.0" y="428.0" width="8.0" height="14.0" rx="2" fill="none" stroke="#ffbe27" stroke-width="1.5" />
+  <rect x="140.5" y="489.0" width="9.0" height="18.0" rx="2" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <rect x="250.0" y="390.0" width="150.0" height="150.0" rx="10" fill="#e8e8e8" stroke="none" stroke-width="0" />
+  <path d="M268.8 390 V540 M250 408.8 H400" fill="none" stroke="#141414" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
+  <path d="M287.5 390 V540 M250 427.5 H400" fill="none" stroke="#141414" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
+  <path d="M306.2 390 V540 M250 446.2 H400" fill="none" stroke="#141414" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
+  <path d="M325.0 390 V540 M250 465.0 H400" fill="none" stroke="#141414" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
+  <path d="M343.8 390 V540 M250 483.8 H400" fill="none" stroke="#141414" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
+  <path d="M362.5 390 V540 M250 502.5 H400" fill="none" stroke="#141414" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
+  <path d="M381.2 390 V540 M250 521.2 H400" fill="none" stroke="#141414" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" />
+  <rect x="250.0" y="390.0" width="150.0" height="150.0" rx="10" fill="none" stroke="#5c5c5c" stroke-width="2" />
+  <text x="145.0" y="572.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" fill="#141414" text-anchor="middle">LiDAR</text>
+  <text x="145.0" y="596.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#555555" text-anchor="middle">TransFuser</text>
+  <text x="325.0" y="572.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" fill="#141414" text-anchor="middle">Fixed grid</text>
+  <text x="325.0" y="596.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#555555" text-anchor="middle">Latent TransFuser</text>
+  <rect x="480.0" y="40.0" width="560.0" height="570.0" rx="20" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="512.0" y="90.0" font-family="'Space Grotesk','IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="32" font-weight="600" fill="#f5f3ee" text-anchor="start">Encoder</text>
+  <text x="512.0" y="122.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#c4c4c4" text-anchor="start">Two ResNet-34 branches, fused 4 times</text>
+  <rect x="630.0" y="160.0" width="76.0" height="64.0" rx="10" fill="#ffecb8" stroke="#e5a300" stroke-width="2" />
+  <rect x="630.0" y="370.0" width="76.0" height="64.0" rx="10" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2" />
+  <rect x="626.0" y="266.0" width="84.0" height="62.0" rx="10" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <text x="668.0" y="303.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#f5f3ee" text-anchor="middle">Fuse</text>
+  <path d="M668 226 L668 260" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <path d="M668 332 L668 364" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <path d="M708 192 L726 192" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M708 402 L726 402" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <rect x="730.0" y="160.0" width="76.0" height="64.0" rx="10" fill="#ffecb8" stroke="#e5a300" stroke-width="2" />
+  <rect x="730.0" y="370.0" width="76.0" height="64.0" rx="10" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2" />
+  <rect x="726.0" y="266.0" width="84.0" height="62.0" rx="10" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <text x="768.0" y="303.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#f5f3ee" text-anchor="middle">Fuse</text>
+  <path d="M768 226 L768 260" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <path d="M768 332 L768 364" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <path d="M808 192 L826 192" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M808 402 L826 402" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <rect x="830.0" y="160.0" width="76.0" height="64.0" rx="10" fill="#ffecb8" stroke="#e5a300" stroke-width="2" />
+  <rect x="830.0" y="370.0" width="76.0" height="64.0" rx="10" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2" />
+  <rect x="826.0" y="266.0" width="84.0" height="62.0" rx="10" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <text x="868.0" y="303.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#f5f3ee" text-anchor="middle">Fuse</text>
+  <path d="M868 226 L868 260" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <path d="M868 332 L868 364" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <path d="M908 192 L926 192" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M908 402 L926 402" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <rect x="930.0" y="160.0" width="76.0" height="64.0" rx="10" fill="#ffecb8" stroke="#e5a300" stroke-width="2" />
+  <rect x="930.0" y="370.0" width="76.0" height="64.0" rx="10" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2" />
+  <rect x="926.0" y="266.0" width="84.0" height="62.0" rx="10" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <text x="968.0" y="303.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#f5f3ee" text-anchor="middle">Fuse</text>
+  <path d="M968 226 L968 260" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <path d="M968 332 L968 364" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" marker-start="url(#m)" />
+  <text x="512.0" y="180.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" fill="#ffbe27" text-anchor="start">Image</text>
+  <text x="512.0" y="390.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" fill="#d4d4d4" text-anchor="start">BEV</text>
+  <rect x="520.0" y="480.0" width="96.0" height="96.0" rx="4" fill="#e8e8e8" stroke="none" stroke-width="0" />
+  <rect x="520.0" y="480.0" width="96.0" height="96.0" rx="4" fill="url(#grid8)" stroke="none" stroke-width="0" />
+  <rect x="520.0" y="480.0" width="96.0" height="96.0" rx="4" fill="none" stroke="#5c5c5c" stroke-width="2" />
+  <text x="638.0" y="520.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#f5f3ee" text-anchor="start">64 BEV tokens</text>
+  <text x="638.0" y="548.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#c4c4c4" text-anchor="start">8 × 8 over 64 m ahead</text>
+  <circle cx="900" cy="510" r="8" fill="#ffbe27" />
+  <circle cx="922" cy="510" r="8" fill="#ffbe27" />
+  <circle cx="944" cy="510" r="8" fill="#ffbe27" />
+  <circle cx="966" cy="510" r="8" fill="#ffbe27" />
+  <circle cx="900" cy="534" r="8" fill="#ffbe27" />
+  <circle cx="922" cy="534" r="8" fill="#ffbe27" />
+  <circle cx="944" cy="534" r="8" fill="#ffbe27" />
+  <circle cx="966" cy="534" r="8" fill="#ffbe27" />
+  <text x="933.0" y="574.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#c4c4c4" text-anchor="middle">8 registers</text>
+  <rect x="1100.0" y="40.0" width="460.0" height="458.0" rx="20" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="1132.0" y="90.0" font-family="'Space Grotesk','IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="32" font-weight="600" fill="#f5f3ee" text-anchor="start">Decoders</text>
+  <rect x="1128.0" y="120.0" width="404.0" height="96.0" rx="12" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <text x="1150.0" y="158.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#f5f3ee" text-anchor="start">Perception</text>
+  <text x="1150.0" y="186.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#c4c4c4" text-anchor="start">BEV semantics · CenterNet detections</text>
+  <rect x="1128.0" y="232.0" width="404.0" height="236.0" rx="12" fill="#2b2b2b" stroke="#ffbe27" stroke-width="2" />
+  <text x="1150.0" y="270.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#f5f3ee" text-anchor="start">DiT Motion Planner</text>
+  <text x="1150.0" y="298.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#c4c4c4" text-anchor="start">+ speed · target points</text>
+  <rect x="1152.0" y="320.0" width="150.0" height="36.0" rx="8" fill="#3d3d3d" stroke="none" stroke-width="0" />
+  <text x="1227.0" y="345.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#f5f3ee" text-anchor="middle">Path</text>
+  <text x="1322.0" y="345.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#c4c4c4" text-anchor="start">64 × 1 m</text>
+  <rect x="1152.0" y="366.0" width="150.0" height="36.0" rx="8" fill="#3d3d3d" stroke="none" stroke-width="0" />
+  <text x="1227.0" y="391.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#f5f3ee" text-anchor="middle">Actions</text>
+  <text x="1322.0" y="391.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#c4c4c4" text-anchor="start">64 × 0.1 s</text>
+  <rect x="1152.0" y="412.0" width="150.0" height="36.0" rx="8" fill="#f5f3ee" stroke="none" stroke-width="0" />
+  <text x="1227.0" y="437.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#141414" text-anchor="middle">Waypoints</text>
+  <text x="1322.0" y="437.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#c4c4c4" text-anchor="start">64 × 0.1 s</text>
+  <path d="M420 192 L620 192" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" />
+  <path d="M420 402 L620 402" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" />
+  <path d="M1000 528 L1070 528 L1070 168" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M1070 168 L1120 168" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" />
+  <path d="M1070 358 L1120 358" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" />
+</svg>

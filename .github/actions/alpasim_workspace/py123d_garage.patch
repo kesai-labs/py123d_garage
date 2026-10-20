@@ -1,23 +1,9 @@
-Alpasim image build on the Scaleway cluster. Apply from the repo root:
+Changes to the upstream alpasim checkout for the image build. Apply from the repo root:
     git -C py123d_garage/lib/alpasim/alpasim apply "$PWD/py123d_garage/.github/actions/alpasim_workspace/py123d_garage.patch"
 
-Dockerfile: the CUDA base image from the NGC mirror, since Docker Hub resets
-    connections from the compute nodes. Same image, same digest.
-.dockerignore: copy uv.lock into the build context, so the image gets the versions
-    setup_alpasim.sh resolved on the host instead of re-resolving the whole
-    workspace, which needs GitHub. Upstream gitignores the lock, so it is per checkout.
-Dockerfile: git protocol v1 inside the image, since v2 fetches fail on the cluster
-    with "expected flush after ref listing".
-Dockerfile: install every core package except alpasim_driver. The garage driver
-    runs on the host, and the driver member is the only one installed from GitHub,
-    which refuses anonymous fetches from the compute nodes.
-src/controller/pyproject.toml: casadi<3.8. Not cluster specific: casadi 3.8.0
-    dropped the casadi.tools re-exports do_mpc 5.1.1 imports, so the controller
-    dies at import with any fresh resolution.
-src/wizard/alpasim_wizard/services.py: no check of the docker GPU ids against
-    nvidia-smi. Inside a Slurm job nvidia-smi only lists the allocated GPUs, while
-    docker addresses GPUs by host index, so services.*.gpus=[<host index>] is
-    right and the check rejected it.
+.dockerignore: copy uv.lock into the build context.
+Dockerfile: CUDA base image from the NGC mirror, same digest; git protocol v1; every core package except alpasim_driver.
+src/wizard/alpasim_wizard/services.py: no check of the docker GPU ids against nvidia-smi.
 
 diff --git a/.dockerignore b/.dockerignore
 index 3438482..7b3c4ac 100644
@@ -68,18 +54,6 @@ index fd39884..ce8bab1 100644
 
  ENV UV_CACHE_DIR=/tmp/uv-cache
  ENV UV_NO_SYNC=1
-diff --git a/src/controller/pyproject.toml b/src/controller/pyproject.toml
-index fbb5916..da84c80 100644
---- a/src/controller/pyproject.toml
-+++ b/src/controller/pyproject.toml
-@@ -10,6 +10,7 @@ requires-python = ">=3.11,<3.13"
- dependencies = [
-     "numpy",
-     "do_mpc",
-+    "casadi<3.8",  # 3.8.0 dropped the casadi.tools re-exports do_mpc imports
-     "pytest",
-     "matplotlib",
-     "osqp",
 diff --git a/src/wizard/alpasim_wizard/services.py b/src/wizard/alpasim_wizard/services.py
 index 57b936c..2ea70c2 100644
 --- a/src/wizard/alpasim_wizard/services.py

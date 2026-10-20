@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for LiDAR ground removal: the fixed height cut vs the fitted planes."""
 
 from __future__ import annotations

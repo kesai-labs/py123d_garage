@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """VaVAM's rendered view: the context camera frame over a blank BEV sheet holding the trajectories."""
 
 from __future__ import annotations
@@ -84,7 +87,17 @@ def render_view(
 
 
 def _to_pixel(x: float, y: float, config: VavamVisualizationConfig) -> tuple[int, int]:
-    """Ego-frame (x, y) in meters → BEV (column, row), x (forward) up and y (left) on the left."""
+    """
+    Maps an ego-frame point to a BEV pixel, with x (forward) up and y (left) to the left.
+
+    Args:
+        x: forward coordinate in meters.
+        y: left coordinate in meters.
+        config: the sheet geometry.
+
+    Returns:
+        the pixel as (column, row).
+    """
     return (
         round((config.bev_half_width_m - y) * config.bev_pixels_per_meter),
         round((config.bev_max_x_m - x) * config.bev_pixels_per_meter),
@@ -97,6 +110,15 @@ def _draw_trajectory(
     trajectory_style: TrajectoryStyleConfig,
     config: VavamVisualizationConfig,
 ) -> None:
+    """
+    Draws a trajectory as a polyline with a dot per pose.
+
+    Args:
+        bev: BEV sheet drawn on in place.
+        poses_xy: poses in the ego frame.
+        trajectory_style: line and dot style.
+        config: the sheet geometry.
+    """
     pixels = np.array([_to_pixel(float(x), float(y), config) for x, y in poses_xy], dtype=np.int32)
     cv2.polylines(
         bev,
@@ -122,6 +144,14 @@ def _draw_ego_box(
     ego_box: jt.Float32[npt.NDArray[np.float32], " 5"],
     config: VavamVisualizationConfig,
 ) -> None:
+    """
+    Draws the ego box outline.
+
+    Args:
+        bev: BEV sheet drawn on in place.
+        ego_box: the ego box (x, y, yaw, length, width) in the ego frame.
+        config: the sheet geometry and the box style.
+    """
     x, y, yaw, length, width = (float(value) for value in ego_box)
     cos_yaw, sin_yaw = math.cos(yaw), math.sin(yaw)
     corners = [

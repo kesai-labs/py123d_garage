@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from py123d_garage.common.runtime_typing import import_unwrapped
 
 # The vendored annotations are not beartype-clean (e.g. properties declared -> None).

@@ -1,7 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+"""Builds the cache stores of a policy's features and labels for each offline data source."""
+
 from __future__ import annotations
 
 import faulthandler
 import logging
+import shutil
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import asdict
@@ -47,22 +53,33 @@ from py123d_garage.py123d_help.scene_builders import VerboseThreadPoolExecutor, 
 
 LOG = logging.getLogger(__name__)
 
-# One record per finished shard; the manifest is written once all are there.
+# Directory of one record per finished shard; the manifest is written once all are there.
 _SHARD_RECORD_DIR = "shards"
 
 
 class _SceneToBlobsDataset(TorchDataset[tuple[str, str, dict[str, bytes]]]):
+    """Builds and encodes the stored tensors of one scene per item."""
+
     def __init__(
         self,
         scenes: Sequence[SceneAPI],
         policy: AnyPolicy,
         tensor_codecs: dict[str, TensorCodec],
     ):
+        """
+        Set up the scenes to encode.
+
+        Args:
+            scenes: the scenes to build
+            policy: the policy whose feature and label builders run on each scene
+            tensor_codecs: the codec of each stored tensor, by tensor name
+        """
         self._scenes = scenes
         self._policy = policy
         self._tensor_codecs = tensor_codecs
 
     def __len__(self) -> int:
+        """The number of scenes to build."""
         return len(self._scenes)
 
     @override
@@ -90,7 +107,12 @@ class _SceneToBlobsDataset(TorchDataset[tuple[str, str, dict[str, bytes]]]):
 
 
 def _worker_init(_worker_id: int) -> None:
-    """One thread per worker: there are already as many workers as cores."""
+    """
+    Limit each worker to one thread, since there are already as many workers as cores.
+
+    Args:
+        _worker_id: the DataLoader worker index, unused
+    """
     torch.set_num_threads(1)
     cv2.setNumThreads(0)
     numba.set_num_threads(1)  # pyright: ignore[reportUnknownMemberType]
@@ -99,6 +121,15 @@ def _worker_init(_worker_id: int) -> None:
 def _group_scenes_by_log_name(
     scenes: Sequence[SceneAPI],
 ) -> dict[str, list[SceneAPI]]:
+    """
+    Group scenes by their log.
+
+    Args:
+        scenes: the scenes to group
+
+    Returns:
+        the scenes of each log, in input order
+    """
     scenes_by_log_name: dict[str, list[SceneAPI]] = defaultdict(list)
     for scene in scenes:
         scenes_by_log_name[scene.log_name].append(scene)
@@ -111,6 +142,18 @@ def _shard_record_file(
     shard_index: int,
     shard_count: int,
 ) -> Path:
+    """
+    Path of one shard's finished-build record.
+
+    Args:
+        cache_root: the store's root directory
+        cache_id: the build run's id, shared by every shard
+        shard_index: the shard's index
+        shard_count: the run's number of shards
+
+    Returns:
+        the record file path
+    """
     return Path(cache_root) / _SHARD_RECORD_DIR / f"{cache_id}_{shard_index:04d}_of_{shard_count:04d}.yaml"
 
 
@@ -122,8 +165,17 @@ def _record_finished_shard(
     manifest: dict[str, Any] | None,
 ) -> bool:
     """
-    Records this shard's finished build; True once every shard of the run has one.
-    Completion counts only this run's cache_id, ignoring older runs' leftovers.
+    Record this shard's finished build and check whether every shard of the run is done.
+
+    Args:
+        cache_root: the store's root directory
+        cache_id: the build run's id; older runs' records are ignored
+        shard_index: this shard's index
+        shard_count: the run's number of shards
+        manifest: this shard's manifest, or None for an empty shard
+
+    Returns:
+        True once every shard of the run has a record
     """
     import yaml
 
@@ -145,7 +197,17 @@ def _manifest_from_shard_records(
     cache_id: str,
     shard_count: int,
 ) -> dict[str, Any] | None:
-    """The manifest a non-empty shard of the run recorded, or None when all were empty."""
+    """
+    Find the manifest a non-empty shard of the run recorded.
+
+    Args:
+        cache_root: the store's root directory
+        cache_id: the build run's id
+        shard_count: the run's number of shards
+
+    Returns:
+        the first non-empty shard's manifest, or None when all were empty
+    """
     import yaml
 
     for index in range(shard_count):
@@ -168,8 +230,12 @@ def _finish_shard(
     manifest: dict[str, Any] | None,
 ) -> None:
     """
-    Records this shard and seals the store when it is the run's last. An empty
-    shard records None; the seal takes a non-empty shard's manifest.
+    Record this shard and seal the store when it is the run's last.
+
+    Args:
+        cache_config: the build config naming the run and shard
+        cache_root: the store's root directory
+        manifest: this shard's manifest, or None for an empty shard
     """
     if not _record_finished_shard(
         cache_root,
@@ -204,8 +270,11 @@ def _check_no_unsealed_leftovers(
     shard_log_names: list[str],
 ) -> None:
     """
-    Refuse to resume onto unsealed blobs: their config is unrecorded. Probes only this
-    shard's logs, since sibling shards write elsewhere before the store is sealed.
+    Refuse to resume onto unsealed records, whose config is unknown.
+
+    Args:
+        cache_root: the store's root directory
+        shard_log_names: this shard's logs, the only ones probed since sibling shards write elsewhere
     """
     if read_manifest(cache_root) is not None:
         return
@@ -219,11 +288,34 @@ def _check_no_unsealed_leftovers(
         )
 
 
+def _delete_shard_logs(cache_root: str, shard_log_names: list[str]) -> None:
+    """
+    Delete this shard's log folders, so a forced rebuild reseals only blobs it wrote itself.
+
+    Args:
+        cache_root: the store's root directory
+        shard_log_names: this shard's logs; logs outside the split or log list keep their blobs
+    """
+    for log_name in shard_log_names:
+        shutil.rmtree(Path(cache_root) / log_name, ignore_errors=True)
+
+
 def _is_scene_fully_stored(
     scene: SceneAPI,
     required_tensor_names: list[str],
     stored_tensor_keys: set[str],
 ) -> bool:
+    """
+    Check whether the store holds every required tensor of a scene.
+
+    Args:
+        scene: the scene to check
+        required_tensor_names: the tensors each scene must have
+        stored_tensor_keys: the stored tensor addresses of the scene's log
+
+    Returns:
+        True when every required tensor is stored
+    """
     return all(f"{scene.scene_uuid}/{tensor_name}" in stored_tensor_keys for tensor_name in required_tensor_names)
 
 
@@ -234,8 +326,16 @@ def _select_scenes_missing_from_store(
     force_rebuild: bool,
 ) -> list[SceneAPI]:
     """
-    Selects the scenes not yet fully stored, ordered log by log so the write
-    loop keeps a single LMDB writer open.
+    Select the scenes not yet fully stored, ordered log by log so the write loop keeps one writer open.
+
+    Args:
+        scenes: the candidate scenes
+        cache_root: the store's root directory
+        required_tensor_names: the tensors each scene must have
+        force_rebuild: select every scene regardless of the store
+
+    Returns:
+        the scenes to build
     """
     scenes_by_log_name: dict[str, list[SceneAPI]] = _group_scenes_by_log_name(
         scenes,
@@ -294,7 +394,7 @@ def main(cfg: DictConfig) -> None:
             build_from_string(cache_config.policy_config, AbstractPolicy),
         )
 
-    for source_index, source in enumerate(cache_config.offline_data_sources.values()):
+    for source_index, source in enumerate(cache_config.offline_data_sources):
         LOG.info(
             f"Source {source_index + 1} of {len(cache_config.offline_data_sources)}: {source.data_root} -> {source.cache_root}",
         )
@@ -307,7 +407,14 @@ def _build_store(
     policy: AnyPolicy,
     source: OfflineTrainingDataSourceConfig,
 ) -> None:
-    """Builds or extends one source's store; this job writes only its shard of it."""
+    """
+    Build or extend one source's store; this job writes only its shard of it.
+
+    Args:
+        cache_config: the build config
+        policy: the policy whose builders produce the stored tensors
+        source: the data source to cache
+    """
     cache_root: str = source.cache_root
 
     if cache_config.force_cache_rebuild:
@@ -330,7 +437,12 @@ def _build_store(
         _finish_shard(cache_config, cache_root, manifest=None)
         return
     scene_filter.log_names = shard_log_names
-    if not cache_config.force_cache_rebuild:
+    if cache_config.force_cache_rebuild:
+        with log_stage(
+            f"Deleting this shard's {len(shard_log_names)} log folders; logs outside the split keep their blobs",
+        ):
+            _delete_shard_logs(cache_root, shard_log_names)
+    else:
         _check_no_unsealed_leftovers(cache_root, shard_log_names)
 
     scene_builder: ArrowSceneBuilder = build_scene_builder(

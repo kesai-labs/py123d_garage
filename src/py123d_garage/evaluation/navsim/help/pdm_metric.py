@@ -34,7 +34,12 @@ class PDMMetric:
     """Scores an agent trajectory with the PDM-Closed closed-loop simulation and scorer."""
 
     def __init__(self, route_correction: bool = True) -> None:
-        """Constructor of PDMMetric, fixing the scoring sampling to 4s at 0.1s intervals."""
+        """
+        Sets up the metric, which scores 4 s at 0.1 s intervals.
+
+        Args:
+            route_correction: Whether PDM-Closed corrects its route on the first iteration.
+        """
         self._score_trajectory_grid = TrajectoryGrid.from_horizon_and_interval(
             horizon_us=4_000_000,
             interval_us=100_000,
@@ -46,31 +51,35 @@ class PDMMetric:
         scene_api: SceneAPI,
         **kwargs: TrajectoryXY | TrajectorySE2,
     ) -> dict[str, float]:
+        """
+        Scores the agent trajectory on a scene against the PDM-Closed reference.
+
+        Args:
+            scene_api: Scene to score on.
+            **kwargs: Must hold agent_trajectory, the ego-relative trajectory to score.
+
+        Returns:
+            The PDM sub-scores and the final score of the agent trajectory.
+        """
         assert "agent_trajectory" in kwargs, "Missing required argument: agent_trajectory"
         agent_trajectory = kwargs["agent_trajectory"]
         assert isinstance(agent_trajectory, TrajectoryXY | TrajectorySE2), (
             "Argument 'agent_trajectory' must be a TrajectoryXY or a TrajectorySE2"
         )
 
-        # 1. Run PDM-Closed to get trajectory.
-        # 1.1 Initialize PDM-Closed planner with map and route information.
         pdm_agent = PDMAgent(route_correction=self._route_correction)
         map_api = scene_api.get_map_api()
         assert map_api is not None, "MapAPI not found in SceneAPI."
         pdm_agent.initialize()
 
-        # 1.2 Run PDM-Closed inference
         pdm_trajectory = pdm_agent.compute_trajectory(scene_api)
         assert isinstance(pdm_trajectory, TrajectorySE2), "PDM-Closed trajectory must be of type TrajectorySE2."
 
-        # 2. Convert PDM + agent trajectory to state arrays well aligned.
         _ego_state_se3 = scene_api.get_ego_state_se3_at_iteration(0)
         assert _ego_state_se3 is not None, "Initial ego state SE3 not found in SceneAPI."
         initial_ego_state_se2 = _ego_state_se3.ego_state_se2
 
-        # The PDM simulator/scorer operate in the absolute frame. PDM-Closed already plans in global
-        # coordinates, whereas the evaluated agent trajectory is ego-relative (the AbstractPolicy
-        # contract), so only the latter needs converting to absolute.
+        # PDM-Closed plans in the absolute frame, the agent trajectory is ego-relative.
         resampled_pdm_trajectory = resample_trajectory_se2(
             trajectory=pdm_trajectory,
             trajectory_grid=self._score_trajectory_grid,
@@ -88,9 +97,8 @@ class PDMMetric:
                 resampled_pdm_trajectory,
                 resampled_agent_trajectory,
             ],
-        )  # for shape assertion
+        )
 
-        # 3. Simulate PDM and agent trajectory.
         simulated_states = PDMSimulator(
             self._score_trajectory_grid,
         ).simulate_proposals(
@@ -98,7 +106,6 @@ class PDMMetric:
             initial_ego_state=initial_ego_state_se2,
         )
 
-        # 4. Evaluate PDM and agent trajectory with PDM-Closed scorer.
         # TODO@DanielDauner: This needs a cleaner solution, needs to be refactored together with PDMScorer.
         assert pdm_agent._drivable_area_map is not None, "PDM-Closed planner drivable area map is not initialized."
         assert pdm_agent._route_lane_group_dict is not None, "PDM-Closed planner route lane groups are not initialized."
@@ -133,7 +140,6 @@ class PDMMetric:
             ego_metadata=initial_ego_state_se2.metadata,
         )
 
-        # 5. Return PDM sub-scores as dict.
         return cast(
             dict[str, float],
             pdm_scores[1].iloc[0].to_dict(),
@@ -144,13 +150,13 @@ def _convert_trajectory_to_state_array(
     trajectories: list[TrajectorySE2],
 ) -> jt.Float64[npt.NDArray[np.float64], "trajectories poses 11"]:
     """
-    Convert trajectories to a stacked state array representation for PDM modules.
+    Stacks trajectories into the state array the PDM modules take.
 
     Args:
-        trajectories: input trajectories (all with the same number of poses)
+        trajectories: Trajectories with the same number of poses.
 
     Returns:
-        trajectories as a state array
+        The state array with only the pose entries filled.
     """
     # TODO@DanielDauner: This is a temporary solution, we should refactor the PDM modules to work with TrajectorySE2 directly.
     num_poses_ = trajectories[0].pose_se2_array.shape[0]
@@ -162,7 +168,7 @@ def _convert_trajectory_to_state_array(
             len(StateIndex),
         ),
         dtype=np.float64,
-    )  # x, y, heading
+    )
 
     for traj_idx, trajectory in enumerate(trajectories):
         assert trajectory.pose_se2_array.shape[0] == num_poses_, "All trajectories must have the same number of poses."

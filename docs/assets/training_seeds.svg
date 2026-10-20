@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 382" width="1600" height="382">
+  <defs>
+    <marker id="m" orient="auto-start-reverse" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#9a9a9a" />
+    </marker>
+    <marker id="mb" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#141414" />
+    </marker>
+    <marker id="mo" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#e5a300" />
+    </marker>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d6d4cf" />
+      <stop offset="0.45" stop-color="#efede8" />
+    </linearGradient>
+    <pattern id="grid8" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#141414" stroke-opacity="0.35" stroke-width="1.5" />
+    </pattern>
+  </defs>
+  <rect x="0.0" y="0.0" width="1600.0" height="382.0" rx="24" fill="#f5f3ee" stroke="none" stroke-width="0" />
+  <text x="330.0" y="66.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">Epoch 1</text>
+  <text x="620.0" y="66.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">Epoch 2</text>
+  <text x="910.0" y="66.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">Epoch 3</text>
+  <text x="174.0" y="124.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="end">Seed 0</text>
+  <rect x="200.0" y="90.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="206.0" y="98.0" width="74.7" height="36.0" rx="7" fill="#141414" stroke="none" stroke-width="0" />
+  <rect x="490.0" y="90.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="582.7" y="98.0" width="74.7" height="36.0" rx="7" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <rect x="780.0" y="90.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="959.3" y="98.0" width="74.7" height="36.0" rx="7" fill="#8c8c8c" stroke="none" stroke-width="0" />
+  <text x="174.0" y="194.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="end">Seed 1</text>
+  <rect x="200.0" y="160.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="292.7" y="168.0" width="74.7" height="36.0" rx="7" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <rect x="490.0" y="160.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="669.3" y="168.0" width="74.7" height="36.0" rx="7" fill="#8c8c8c" stroke="none" stroke-width="0" />
+  <rect x="780.0" y="160.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="786.0" y="168.0" width="74.7" height="36.0" rx="7" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="174.0" y="264.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="end">Seed 2</text>
+  <rect x="200.0" y="230.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="379.3" y="238.0" width="74.7" height="36.0" rx="7" fill="#8c8c8c" stroke="none" stroke-width="0" />
+  <rect x="490.0" y="230.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="496.0" y="238.0" width="74.7" height="36.0" rx="7" fill="#141414" stroke="none" stroke-width="0" />
+  <rect x="780.0" y="230.0" width="260.0" height="52.0" rx="10" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="872.7" y="238.0" width="74.7" height="36.0" rx="7" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <path d="M200 306 L200 316 L1040 316 L1040 306" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <text x="620.0" y="350.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">1 super-epoch = 3 epochs</text>
+  <path d="M1062 186.0 L1110 186.0" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#m)" />
+  <rect x="1130.0" y="98.0" width="54.0" height="36.0" rx="7" fill="#141414" stroke="none" stroke-width="0" />
+  <rect x="1192.0" y="98.0" width="54.0" height="36.0" rx="7" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <rect x="1254.0" y="98.0" width="54.0" height="36.0" rx="7" fill="#8c8c8c" stroke="none" stroke-width="0" />
+  <rect x="1130.0" y="168.0" width="54.0" height="36.0" rx="7" fill="#141414" stroke="none" stroke-width="0" />
+  <rect x="1192.0" y="168.0" width="54.0" height="36.0" rx="7" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <rect x="1254.0" y="168.0" width="54.0" height="36.0" rx="7" fill="#8c8c8c" stroke="none" stroke-width="0" />
+  <rect x="1130.0" y="238.0" width="54.0" height="36.0" rx="7" fill="#141414" stroke="none" stroke-width="0" />
+  <rect x="1192.0" y="238.0" width="54.0" height="36.0" rx="7" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <rect x="1254.0" y="238.0" width="54.0" height="36.0" rx="7" fill="#8c8c8c" stroke="none" stroke-width="0" />
+  <text x="1223.0" y="350.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="400" fill="#555555" text-anchor="middle">Every seed saw all data</text>
+</svg>

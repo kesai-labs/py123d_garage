@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
 from __future__ import annotations
 
 import logging
@@ -24,11 +28,18 @@ class _RepoPathFormatter(logging.Formatter):
     """Names a record's source by its path in the repo, third-party ones by file."""
 
     def __init__(self, fmt: str) -> None:
+        """
+        Initializes the formatter relative to the current working dir.
+
+        Args:
+            fmt: the logging format string.
+        """
         super().__init__(fmt)
         self._working_dir = Path.cwd()
 
     @override
     def format(self, record: logging.LogRecord) -> str:
+        """Formats the record with its source path relative to the working dir."""
         absolute_source_file = record.pathname
         try:
             record.pathname = str(
@@ -47,11 +58,31 @@ class _RankFilter(logging.Filter):
 
     @override
     def filter(self, record: logging.LogRecord) -> bool:
-        # rank_zero_only.rank is attached by lightning and rank_tag by this
-        # filter, so neither is visible to their declared types.
+        """Tags the record with its rank and keeps it on rank zero or at WARNING and above."""
+        # rank_zero_only.rank is attached by lightning and rank_tag by this filter, so neither has a declared type.
         rank: int = getattr(rank_zero_only, "rank", 0)
         record.__dict__["rank_tag"] = "" if rank == 0 else f"[rank {rank}] "
         return rank == 0 or record.levelno >= logging.WARNING
+
+
+class _RepeatedWarningFilter(logging.Filter):
+    """Passes each distinct WARNING once per process; libraries repeat theirs per sample read."""
+
+    def __init__(self) -> None:
+        """Initializes the filter with no warnings seen."""
+        super().__init__()
+        self._seen: set[tuple[str, str]] = set()
+
+    @override
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Keeps every non-WARNING record and the first of each distinct warning."""
+        if record.levelno != logging.WARNING:
+            return True
+        key = (record.name, record.getMessage())
+        if key in self._seen:
+            return False
+        self._seen.add(key)
+        return True
 
 
 def setup_logging() -> None:
@@ -66,9 +97,9 @@ def setup_logging() -> None:
                 "[%(asctime)s][%(levelname)s]%(rank_tag)s[%(pathname)s:%(lineno)d] %(message)s",
             ),
         )
-        # On the handler, so it applies to records propagating up from any
-        # logger, not only those logged through the root one.
+        # On the handler, so it also applies to records propagating up from other loggers.
         handler.addFilter(_RankFilter())
+        handler.addFilter(_RepeatedWarningFilter())
         root.addHandler(handler)
     for existing in root.manager.loggerDict.values():
         if isinstance(existing, logging.Logger):
@@ -78,10 +109,7 @@ def setup_logging() -> None:
 @contextmanager
 def log_stage(description: str) -> Generator[None]:
     """
-    Logs a stage's start and its wall time when it ends.
-
-    The startup stages read the whole dataset's metadata and take minutes;
-    without both ends logged a run is indistinguishable from a hung one.
+    Logs a stage's start and its wall time when it ends, so a slow stage is not mistaken for a hang.
 
     Args:
         description: what the stage does, e.g. "Listing logs of nuplan_train".
@@ -89,8 +117,7 @@ def log_stage(description: str) -> Generator[None]:
     Yields:
         nothing; the stage runs inside the context.
     """
-    # Past this generator and the contextmanager frame that drives it, so the
-    # records carry the `with` statement's file and line, not this one's.
+    # The records carry the `with` statement's file and line, not this one's.
     LOG.info(f"{description} ...", stacklevel=_CALLER_STACKLEVEL)
     start_time = time.perf_counter()
     yield

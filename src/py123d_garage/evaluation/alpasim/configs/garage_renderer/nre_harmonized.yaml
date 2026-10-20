@@ -1,0 +1,24 @@
+# @package _global_
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+# The NRE renderer of the PAI track with the harmonizer, as AlpaSim's Alpamayo 1 reference run and the challenge's
+# final reruns render; the README's numbers use it. Select it with garage_renderer=nre_harmonized. One harmonizer
+# cache per replica: replicas sharing one download the checkpoint into the same file at once, and one loads a partial
+# file.
+services:
+  renderer:
+    command:
+      - "${defines.renderer_entrypoint}"
+      - "serve-grpc"
+      - "--port={port}"
+      - "--host=0.0.0.0"
+      - "--artifact-glob=/mnt/nre-data/{sceneset}/**/*.usdz"
+      - "--egocar-hood-dir=/mnt/ego-hoods"
+      - "--no-enable-nrend"
+      - "--enable-harmonizer"
+      - "--harmonizer-cache=/tmp/nre-harmonizer-{port}"
+      - "--download-cache-dir /tmp/nre-cache-dir"
+      - "--cache-size=${defines.nre_cache_size}"
+      - "--max-workers=${defines.nre_max_workers}"
+      - "--enable-editing-actors"

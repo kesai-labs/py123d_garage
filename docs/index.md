@@ -1,9 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/logo_dark.png">
-  <img src="assets/logo_light.png" alt="Py123d Garage" width="575">
-</picture>
+<img src="assets/logo.png" alt="Py123d Garage" width="630">
 
 </div>
 
@@ -32,13 +29,18 @@ Install dependencies:
 uv pip install -e ".[train,carla,alpasim]" --group dev
 ```
 
-To obtain pretrained checkpoints, see [release notes](https://github.com/kesai-labs/py123d_garage/releases).
+## Get started
+
+- Drive a released [checkpoint](https://huggingface.co/kesai-labs/py123d_garage_pretrained_checkpoints) in [AlpaSim](evaluation/alpasim.md).
+- Train from scratch: prepare the [data](data/index.md), then run the [training](training.md).
+- Before testing a new idea, check the [research logs](research_logs.md).
+- Submit to the [Alpasim E2E Challenge 2026](evaluation/alpasim.md#challenge-submission).
 
 ## Further documentation
 
+- [TransFuser](policy/transfuser.md)
 - [Data](data/index.md)
-- [Training Cache System](config.md)
 - [Training](training.md)
 - [Evaluation](evaluation/index.md)
-- [Configuration system](config.md)
+- [Research logs](research_logs.md)
 - [Citation](citation.md)

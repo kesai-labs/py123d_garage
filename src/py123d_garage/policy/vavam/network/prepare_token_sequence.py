@@ -2,6 +2,8 @@
 # Copyright (c) 2025 Valeo
 # Adapted from valeoai/VideoActionModel (MIT License).
 
+"""Flattens visual token grids into sequences with their spatial and temporal position ids."""
+
 from typing import Dict
 
 import torch
@@ -11,20 +13,16 @@ from torch import Tensor
 
 def compute_position_indices(batch_size: int, num_frames: int, height: int, width: int) -> Dict[str, Tensor]:
     """
-    Compute spatial positions, temporal positions, for a given batch size, frame size, and number of frames.
-
-    This static method can be used independently during inference for autoregressive frame generation.
+    Computes the spatial and temporal position id of every token in a flattened frame sequence.
 
     Args:
-        batch_size: Number of samples in the batch.
-        height: Height of each frame.
-        width: Width of each frame.
-        num_frames: Number of frames to generate indices for.
+        batch_size: number of samples in the batch.
+        num_frames: number of frames in the sequence.
+        height: height of each token frame.
+        width: width of each token frame.
 
     Returns:
-        A dictionary containing:
-            - spatial_positions: Tensor of spatial positions for each token, shape [B, T*H*W].
-            - temporal_positions: Tensor of temporal positions for each token, shape [B, T*H*W].
+        spatial_positions and temporal_positions, each shaped [batch, frames * height * width], on CUDA when available.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -41,7 +39,15 @@ def compute_position_indices(batch_size: int, num_frames: int, height: int, widt
 
 
 def prepare_token_sequence(visual_tokens: Tensor) -> Dict[str, Tensor]:
+    """
+    Flattens a token grid into a sequence with its position ids.
 
+    Args:
+        visual_tokens: token ids shaped [batch, frames, height, width].
+
+    Returns:
+        token_sequence, spatial_positions and temporal_positions, each shaped [batch, frames * height * width].
+    """
     position_indices = compute_position_indices(*visual_tokens.shape)
 
     visual_tokens = rearrange(visual_tokens, "b t h w -> b (t h w)")
@@ -50,17 +56,23 @@ def prepare_token_sequence(visual_tokens: Tensor) -> Dict[str, Tensor]:
 
 
 def prepare_AR_token_sequences(visual_tokens: Tensor) -> Dict[str, Tensor]:
+    """
+    Splits a token grid into next-token inputs and targets, shifted by one token.
 
+    Args:
+        visual_tokens: token ids shaped [batch, frames, height, width].
+
+    Returns:
+        the input sequence with its position ids, and the target sequence.
+    """
     sequence_data = prepare_token_sequence(visual_tokens)
 
-    # Create input_tokens by taking all but the last token (shifting by one)
     input_data = {
         "token_sequence": sequence_data["token_sequence"][:, :-1],
         "spatial_positions": sequence_data["spatial_positions"][:, :-1],
         "temporal_positions": sequence_data["temporal_positions"][:, :-1],
     }
 
-    # Create target_tokens by taking all but the first token (shifting by one)
     target_data = {
         "token_sequence": sequence_data["token_sequence"][:, 1:],
     }

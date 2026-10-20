@@ -1,8 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 from typing import Any, ClassVar, cast
 
 import carla
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 import torch
@@ -21,9 +25,9 @@ from py123d.datatypes import (
 from py123d.datatypes.modalities.base_modality import get_modality_key
 from py123d.geometry import EulerAngles, PoseSE3, Quaternion, Vector3D
 
-from py123d_garage.api.abstract_policy import AbstractPolicy, AnyPolicy
+from py123d_garage.api.abstract_policy import AnyPolicy
 from py123d_garage.api.abstract_policy_tensors import NavigationConditioning
-from py123d_garage.common.config_help import build_from_string, load_evaluation_config, run_dir
+from py123d_garage.common.config_help import load_evaluation_config, run_dir
 from py123d_garage.common.video_writer import VideoWriter
 from py123d_garage.config.schema.evaluation.carla_config import (
     CarlaBenchmarkConfig,
@@ -38,6 +42,7 @@ from py123d_garage.evaluation.carla.help.localization import (
 from py123d_garage.evaluation.carla.help.pid import WaypointFollower
 from py123d_garage.evaluation.carla.help.rig import CARLA_FPS, SensorRig
 from py123d_garage.evaluation.carla.help.route import Route
+from py123d_garage.evaluation.help.policy_building import build_evaluation_policy
 from py123d_garage.py123d_help.scene_api.online_scene_api import OnlineSceneAPI
 
 COMPASS_INDEX = 6
@@ -54,13 +59,9 @@ def get_entry_point() -> str:
 
 
 class PolicyAgent(AutonomousAgent):
-    """
-    Leaderboard agent running a garage policy and tracking its predicted waypoints.
+    """Leaderboard agent running a garage policy and tracking its predicted waypoints."""
 
-    --agent-config points to the config arguments the evaluation run saved: they
-    name the policy, its checkpoint, and the sensor rig it was trained on.
-    """
-
+    # Numbers each route's video directory across the agents this process builds.
     _routes_driven: ClassVar[int] = 0
     _py123d_garage_video_writer: VideoWriter | None = None
 
@@ -69,7 +70,7 @@ class PolicyAgent(AutonomousAgent):
         Loads the policy, mounts its rig, and prepares the route.
 
         Args:
-            path_to_conf_file: path to the config arguments the evaluation run saved.
+            path_to_conf_file: unused; the config arrives through the PY123D_GARAGE_CONFIG environment variable.
         """
         self.track = Track.SENSORS
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -87,14 +88,13 @@ class PolicyAgent(AutonomousAgent):
             )
         self._sensor_rig = SensorRig(sensor_rig_file)
 
-        py123d_garage_policy: AnyPolicy = build_from_string(py123d_garage_config.policy_config, AbstractPolicy)
-        py123d_garage_policy.initialize(py123d_garage_config.policy_config.evaluation_checkpoint_file)
+        py123d_garage_policy: AnyPolicy = build_evaluation_policy(py123d_garage_config.policy_config)
         self._py123d_garage_policy = py123d_garage_policy.to(self._device).eval()
         self._target_point_distances_m = py123d_garage_policy.policy_config.required_target_point_distances_m
 
         self._route = Route(
             self._world_route,
-            extension_m=max(self._target_point_distances_m) + 2.0,
+            extension_m=max(self._target_point_distances_m, default=0.0) + 2.0,
         )
         self._scene_api = OnlineSceneAPI(
             log_metadata=LogMetadata(
@@ -121,7 +121,7 @@ class PolicyAgent(AutonomousAgent):
         PolicyAgent._routes_driven += 1
 
         self._waypoint_follower = WaypointFollower(
-            self._py123d_garage_policy.policy_config.trajectory_interval_s,
+            self._py123d_garage_policy.policy_config.trajectory_offsets_us[0] * 1e-6,
         )
 
         assert self._global_plan is not None
@@ -137,10 +137,7 @@ class PolicyAgent(AutonomousAgent):
         global_plan_world_coord: list[tuple[Any, Any]],
     ) -> None:
         """
-        Keeps the dense route the base class is about to downsample away.
-
-        The leaderboard samples its plan down to 200 m spacing, far coarser than
-        the arc-length target points a py123d_garage_policy is conditioned on.
+        Keeps the dense route, which the base class downsamples to 200 m spacing, too coarse for target points.
 
         Args:
             global_plan_gps: the route as ({'lat', 'lon', 'z'}, road option) tuples.
@@ -150,7 +147,12 @@ class PolicyAgent(AutonomousAgent):
         self._world_route = global_plan_world_coord
 
     def _modality_metadatas(self) -> dict[str, BaseModalityMetadata]:
-        """The modality metadata the live scene serves, keyed as a 123D log keys them."""
+        """
+        The modality metadata the live scene serves, keyed as a 123D log keys them.
+
+        Returns:
+            the metadata by modality key.
+        """
         metadatas: dict[str, BaseModalityMetadata] = {
             get_modality_key(ModalityType.EGO_STATE_SE3): self._sensor_rig.ego_metadata,
             self._sensor_rig.lidar_modality_key: self._sensor_rig.lidar_metadata,
@@ -171,7 +173,7 @@ class PolicyAgent(AutonomousAgent):
     def _record_tick(
         self,
         input_data: dict[str, tuple[int, Any]],
-        ego_pose_se2: npt.NDArray[np.float64],
+        ego_pose_se2: jt.Float64[npt.NDArray[np.float64], " 3"],
         speed: NonNegativeFloat,
         route_progress_m: NonNegativeFloat,
     ) -> None:

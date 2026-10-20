@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
 """The label classes of lead's CARLA 123D export, so its logs open without lead installed."""
 
 from __future__ import annotations

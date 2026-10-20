@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,9 +15,11 @@ from py123d_garage.datatypes.numerics import PositiveInt
 
 @dataclass
 class CarlaBenchmarkConfig(AbstractBenchmarkConfig):
+    """Config of the CARLA leaderboard evaluation."""
+
     # -- Config objects --
 
-    # The policy under evaluation; evaluation_checkpoint_file selects its weights.
+    # The policy under evaluation; evaluation_checkpoint_files select its weights.
     policy_config: EvaluationPolicyConfig = field(default_factory=EvaluationPolicyConfig)
 
     # -- Atomic settings --

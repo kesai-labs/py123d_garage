@@ -1,8 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
 from __future__ import annotations
 
 import math
 from typing import TYPE_CHECKING
 
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 from py123d.geometry.utils.rotation_utils import normalize_angle
@@ -16,10 +21,7 @@ TMERC_SCALE = 0.9996  # Scale factor hardcoded in CARLA 0.9.16's GeoLocation::Tr
 
 def preprocess_compass(compass: float) -> float:
     """
-    Turns an IMU compass reading into a CARLA yaw in [-pi, pi].
-
-    The compass points north (90 degrees off CARLA's x-axis) and is NaN on the
-    first simulation ticks.
+    Turns an IMU compass reading, which points north and is NaN at first, into a CARLA yaw in [-pi, pi].
 
     Args:
         compass: compass reading in radians.
@@ -33,10 +35,10 @@ def preprocess_compass(compass: float) -> float:
 
 
 def route_gps_to_carla(
-    gps: npt.NDArray[np.float64],
+    gps: jt.Float64[npt.NDArray[np.float64], " 3"],
     lat_ref: float,
     lon_ref: float,
-) -> npt.NDArray[np.float64]:
+) -> jt.Float64[npt.NDArray[np.float64], " 3"]:
     """
     Inverts the equatorial Mercator projection the leaderboard uses for the route plan.
 
@@ -58,11 +60,11 @@ def route_gps_to_carla(
 
 
 def gnss_to_carla(
-    gnss: npt.NDArray[np.float64],
+    gnss: jt.Float64[npt.NDArray[np.float64], " 3"],
     lat_ref: float,
     lon_ref: float,
     carla_version: str = "0.9.15",
-) -> npt.NDArray[np.float64]:
+) -> jt.Float64[npt.NDArray[np.float64], " 3"]:
     """
     Inverts the GNSS sensor projection of the given CARLA version.
 
@@ -94,10 +96,7 @@ def find_gps_ref(
     global_plan_world_coord: list[tuple[carla.Transform, object]],
 ) -> tuple[float, float]:
     """
-    Solves the map's geo-reference, which the leaderboard does not expose, from the route plan.
-
-    The plan comes in both GPS and world coordinates; the reference is the fixed
-    point of the leaderboard's Mercator projection relating the two.
+    Solves the map's geo-reference, which the leaderboard does not expose, from the GPS and world route plans.
 
     Args:
         global_plan_gps: route plan as ({'lat', 'lon', 'z'}, road option) tuples.
@@ -110,6 +109,15 @@ def find_gps_ref(
     lat, lon = global_plan_gps[0][0]["lat"], global_plan_gps[0][0]["lon"]
 
     def mercator_ordinate(lat_deg: float) -> float:
+        """
+        Computes the unscaled Mercator y ordinate of a latitude.
+
+        Args:
+            lat_deg: latitude in degrees.
+
+        Returns:
+            the ordinate on the unit sphere.
+        """
         return math.log(math.tan((90.0 + lat_deg) * math.pi / 360.0))
 
     lat_ref = lat

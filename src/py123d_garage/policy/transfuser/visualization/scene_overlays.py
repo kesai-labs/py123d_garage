@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Ego-frame overlays read from a scene: the ego box, the ground-truth boxes, the route."""
 
 from __future__ import annotations
@@ -16,10 +19,11 @@ from py123d_garage.config.schema.policy.transfuser_config import (
 from py123d_garage.policy.transfuser.labels import (
     extract_relative_bounding_boxes,
 )
-from py123d_garage.policy.transfuser.network.center_net_decoder import (
+from py123d_garage.policy.transfuser.network.decoder.center_net_decoder import (
     BoundingBoxIndex,
 )
 
+# Route length kept beyond the BEV radius on each side of the ego.
 _ROUTE_WINDOW_MARGIN_M = 5.0
 
 

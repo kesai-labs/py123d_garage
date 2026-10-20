@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+name: cuda_toolchain
+description: >-
+  Shared micromamba env with the CUDA 12.8 toolkit, compute-sanitizer, gcc 13 and clang-tidy on the
+  self-hosted runner's disk, plus a CUDA_HOME view in the toolkit layout torch's
+  extension builder and clang expect. The flock covers overlapping runs.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        _root="$HOME/ci-cache/micromamba"
+        _env="$_root/envs/cuda128-gcc13"
+        _home="$_root/envs/cuda128-gcc13-home"
+        mkdir -p "$_root"
+        (
+          flock 9
+          if [ ! -x "$_root/bin/micromamba" ]; then
+            curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+              | tar -xj -C "$_root" bin/micromamba
+          fi
+          if [ ! -x "$_env/bin/nvcc" ] || [ ! -x "$_env/bin/compute-sanitizer" ]; then
+            "$_root/bin/micromamba" create -y -p "$_env" -c conda-forge \
+              cuda-version=12.8 cuda-nvcc=12.8 cuda-cudart-dev=12.8 cuda-cccl=12.8 cuda-driver-dev=12.8 \
+              cuda-sanitizer-api=12.8 libcublas-dev libcusparse-dev libcusolver-dev libcurand-dev \
+              gcc_linux-64=13 gxx_linux-64=13 ninja clang-tools=20 clangxx=20
+          fi
+          mkdir -p "$_home"
+          ln -sfn "$_env/bin" "$_home/bin"
+          ln -sfn "$_env/targets/x86_64-linux/include" "$_home/include"
+          ln -sfn "$_env/lib" "$_home/lib64"
+          ln -sfn "$_env/nvvm" "$_home/nvvm"
+        ) 9>"$_root/.provision-lock"
+        {
+          echo "CUDA_HOME=$_home"
+          echo "CC=$_env/bin/x86_64-conda-linux-gnu-gcc"
+          echo "CXX=$_env/bin/x86_64-conda-linux-gnu-g++"
+        } >> "$GITHUB_ENV"
+        echo "$_env/bin" >> "$GITHUB_PATH"

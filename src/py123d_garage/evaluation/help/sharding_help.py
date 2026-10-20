@@ -1,13 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """The per-scene results table every offline benchmark writes: one file per shard, merged by the last one."""
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
 
+from py123d_garage.api.abstract_offline_data_source_config import OfflineEvaluationDataSourceConfig
+
 LOG = logging.getLogger(__name__)
+
+
+def expected_num_scenes(sources: Sequence[OfflineEvaluationDataSourceConfig]) -> int | None:
+    """
+    Sums the scene counts the sources declare, for the merge to check.
+
+    Args:
+        sources: the benchmark's sources.
+
+    Returns:
+        the total, or None when any source declares no count.
+    """
+    counts = [source.expected_num_scenes for source in sources]
+    if not counts or any(count is None for count in counts):
+        return None
+    return sum(count for count in counts if count is not None)
 
 
 def save_shard_results(
@@ -53,21 +75,22 @@ def merge_results_if_last_shard(
     output_dir: str,
     num_shards: int,
     shard_index: int,
+    expected_num_scenes: int | None = None,
 ) -> None:
     """
     Merges every shard's table and appends an average row, once all shards have written.
 
-    Every shard calls this after its own atomic write, so at least the last one
-    to finish sees all num_shards files; a concurrent duplicate merge writes
-    identical content.
+    Every shard calls this after its own atomic write, so the last one sees all files; a duplicate merge is harmless.
 
     Args:
         output_dir: the run's output dir, shared by every shard.
         num_shards: how many shard files the merge waits for.
         shard_index: this process's slice, naming its temporary file.
+        expected_num_scenes: how many scenes the sources declare; None skips the count check.
 
     Raises:
         ValueError: if no shard scored a single scene.
+        RuntimeError: once results.csv is written, if a scene is unscorable or the scene count is not the declared one.
     """
     shards_dir = Path(output_dir) / "shards"
     shard_files = sorted(shards_dir.glob("results_*.csv"))
@@ -89,12 +112,6 @@ def merge_results_if_last_shard(
         f"{len(df)} scenes passed the filter across all shards",
     )
     num_unscorable = int(df["scoring_error"].notna().sum()) if "scoring_error" in df else 0
-    if num_unscorable:
-        LOG.warning(
-            f"{num_unscorable}/{len(df)} scenes are unscorable and carry no metrics; "
-            f"the average is over the remaining {len(df) - num_unscorable}. "
-            f"See the scoring_error column of results.csv.",
-        )
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     average_row: dict[str, object] = {"scene_uuid": "average"}
     average_row.update({col: df[col].mean() for col in numeric_cols})
@@ -107,3 +124,14 @@ def merge_results_if_last_shard(
     df.to_csv(temporary_file, index=False)
     temporary_file.replace(results_file)
     LOG.info(f"Merged {len(shard_files)} shard results into {results_file}")
+    num_scenes = len(df) - 1
+    if num_unscorable:
+        raise RuntimeError(
+            f"{num_unscorable}/{num_scenes} scenes are unscorable and carry no metrics; the average row of "
+            f"{results_file} covers the remaining {num_scenes - num_unscorable}, see its scoring_error column.",
+        )
+    if expected_num_scenes is not None and num_scenes != expected_num_scenes:
+        raise RuntimeError(
+            f"{num_scenes} scenes were scored but the sources declare expected_num_scenes={expected_num_scenes}: "
+            f"logs are missing or the scene filter dropped frames.",
+        )

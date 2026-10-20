@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -13,11 +16,11 @@ from py123d_garage.datatypes.numerics import NonNegativeInt, PositiveInt
 
 @dataclass
 class NavsimBenchmarkConfig(AbstractBenchmarkConfig):
-    """The navsim evaluate entry point: PDM-score a policy over the navtest scenes."""
+    """Config of the navsim entry point that PDM-scores a policy over the navtest scenes."""
 
     # -- Config objects --
 
-    # The policy under evaluation; evaluation_checkpoint_file selects its weights.
+    # The policy under evaluation; evaluation_checkpoint_files select its weights.
     policy_config: EvaluationPolicyConfig = field(default_factory=EvaluationPolicyConfig)
     # Sharding across processes and the resources of this shard.
     parallelization_config: ParallelizationConfig = field(
@@ -31,9 +34,7 @@ class NavsimBenchmarkConfig(AbstractBenchmarkConfig):
 
     # -- The navtest protocol, hard-coded --
 
-    # Future window each scored scene carries past its anchor: the PDM horizon
-    # plus the TTC metric's one-second lookahead. The presets author it into
-    # their sources' filters.
+    # Future window each scored scene needs past its anchor: the 4 s PDM horizon plus the TTC metric's 1 s lookahead.
     navsim_scoring_future_duration_us: ClassVar[int] = 5_000_000
 
     @property
@@ -47,3 +48,15 @@ class NavsimBenchmarkConfig(AbstractBenchmarkConfig):
     def max_history_duration_us(self) -> NonNegativeInt:
         """Navsim's AgentInput protocol: the current frame plus 1.5 s of past at 2 Hz."""
         return 1_500_000
+
+    @property
+    @override
+    def scored_scene_future_duration_us(self) -> PositiveInt:
+        """The scoring window with the TTC lookahead; the plan beyond it is not scored, so its labels are not needed."""
+        return self.navsim_scoring_future_duration_us
+
+    @property
+    @override
+    def scored_scene_needs_route(self) -> bool:
+        """Every navtest frame is scored, also the ones whose route ends before the farthest target point."""
+        return False

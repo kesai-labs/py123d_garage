@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Builds py123d scenes from a data root, and the executors that parallelize it."""
 
 from __future__ import annotations

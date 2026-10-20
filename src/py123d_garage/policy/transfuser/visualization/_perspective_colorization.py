@@ -1,7 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Colorization of the perspective semantic-segmentation and depth modalities."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import cast
 
 import cv2
@@ -10,24 +14,33 @@ import numpy as np
 import numpy.typing as npt
 from py123d.datatypes.sensors.camera_segmentation_label import (
     DEFAULT_CAMERA_SEGMENTATION_RGB,
+    TABLEAU_20_RGB,
+    DefaultCameraSegmentationLabel,
 )
 
 
 def semantic_to_rgb(
     class_map: jt.Int64[npt.NDArray[np.int64], "height width"],
+    classes: Sequence[int],
 ) -> jt.UInt8[npt.NDArray[np.uint8], "height width 3"]:
     """
-    Colors the default-taxonomy semantic classes with the Cityscapes palette.
+    Colors default-taxonomy class ids with the Cityscapes palette; ids beyond it get Tableau colors.
 
     Args:
-        class_map: DefaultCameraSegmentationLabel value per pixel
+        class_map: index into classes per pixel
+        classes: the predicted class ids in order, see semantic_classes
 
     Returns:
         RGB image
     """
     palette = np.zeros((256, 3), dtype=np.uint8)
-    for label, rgb in DEFAULT_CAMERA_SEGMENTATION_RGB.items():
-        palette[label.value] = rgb
+    num_extra = 0
+    for index, class_id in enumerate(classes):
+        if class_id < len(DefaultCameraSegmentationLabel):
+            palette[index] = DEFAULT_CAMERA_SEGMENTATION_RGB[DefaultCameraSegmentationLabel(class_id)]
+        else:
+            palette[index] = TABLEAU_20_RGB[num_extra % len(TABLEAU_20_RGB)]
+            num_extra += 1
     return palette[np.clip(class_map, 0, 255).astype(np.int64)]
 
 

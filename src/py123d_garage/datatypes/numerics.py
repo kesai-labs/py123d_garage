@@ -1,12 +1,7 @@
-"""
-Run-time checkable numeric types for use with beartype.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
 
-Those types will not be verified by static type checkers.
-
-Also, they are completely optional and can be ignored if you don't want to use them.
-
-Simply use int and float if you don't want to use these types.
-"""
+"""Optional numeric types that beartype checks at runtime; static type checkers treat them as plain int, float or arrays."""
 
 from __future__ import annotations
 
@@ -31,7 +26,15 @@ NonNegativeFloat: TypeAlias = Annotated[float, Is[lambda x: x >= 0]]
 
 
 def _is_wrapped_angle_rad(angle_rad: Any) -> bool:
-    """Tests whether every angle lies in [-pi, pi); works on numpy and torch."""
+    """
+    Tests whether every angle lies in [-pi, pi); works on numpy and torch.
+
+    Args:
+        angle_rad: angles in radians, as a numpy array or torch tensor.
+
+    Returns:
+        whether all angles are wrapped.
+    """
     return bool((angle_rad >= -np.pi).all()) and bool((angle_rad < np.pi).all())
 
 

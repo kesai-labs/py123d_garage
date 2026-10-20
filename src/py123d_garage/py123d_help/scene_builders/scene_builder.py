@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Scene-builder construction and log discovery over a 123D dir."""
 
 from __future__ import annotations
@@ -17,8 +20,7 @@ def build_scene_builder(data_root: str, lazy: bool = True) -> ArrowSceneBuilder:
 
     Args:
         data_root: the dir holding logs/ and maps/.
-        lazy: defer sensor loading to the DataLoader workers (training and
-            caching); evaluation loads eagerly.
+        lazy: whether to defer sensor loading to the DataLoader workers; evaluation loads eagerly.
 
     Returns:
         the scene builder.
@@ -32,8 +34,17 @@ def build_scene_builder(data_root: str, lazy: bool = True) -> ArrowSceneBuilder:
 
 def find_log_names(data_root: str, split_names: list[str] | None) -> list[str]:
     """
-    Lists log names without reading any log: a log is any directory holding a
-    sync.arrow, which is how py123d finds them too.
+    Lists log names without reading any log, taking every directory holding a sync.arrow as a log, like py123d.
+
+    Args:
+        data_root: the dir holding logs/ and maps/.
+        split_names: the split subdirectories of logs/ to search; None searches all of logs/.
+
+    Returns:
+        the sorted log names.
+
+    Raises:
+        RuntimeError: if no log is found.
     """
     logs_root = Path(data_root) / "logs"
     search_roots = [logs_root] if split_names is None else [logs_root / split_name for split_name in split_names]

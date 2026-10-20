@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Tests of the warmup cosine schedule: cycle geometry and the no-warmup case."""
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, LRScheduler
 
 from py123d_garage.training.lr_scheduler import (
     CosineAnnealingWarmRestartsWithWarmup,
+    cycle_end_epochs,
 )
 
 _BASE_LR = 3.674e-4
@@ -145,3 +149,14 @@ def test_invalid_arguments_are_rejected(
     }
     with pytest.raises(ValueError, match=message):
         CosineAnnealingWarmRestartsWithWarmup(optimizer, **arguments)
+
+
+def test_cycle_end_epochs_are_the_annealed_epochs() -> None:
+    """Doubling cycles of 1, 2, 4, ... epochs end after epochs 0, 2, 6, ...; a cut-off cycle has no end."""
+    assert cycle_end_epochs(63, _T_MULT) == [0, 2, 6, 14, 30, 62]
+    assert cycle_end_epochs(15, _T_MULT) == [0, 2, 6, 14]
+    assert cycle_end_epochs(20, _T_MULT) == [0, 2, 6, 14]
+    assert cycle_end_epochs(3, 1) == [0, 1, 2]
+    assert cycle_end_epochs(0, _T_MULT) == []
+    assert cycle_end_epochs(31, _T_MULT, first_cycle_epochs=31) == [30]
+    assert cycle_end_epochs(31, _T_MULT, first_cycle_epochs=10) == [9, 29]

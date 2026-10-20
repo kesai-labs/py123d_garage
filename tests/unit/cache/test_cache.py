@@ -1,6 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for the cache store: codecs, the LMDB backend, manifest and signature."""
 
 from __future__ import annotations
+
+import os
 
 import numpy as np
 import pytest
@@ -12,6 +17,7 @@ from py123d_garage.cache._lmdb_backend import (
 )
 from py123d_garage.cache.build_cache import (
     _check_no_unsealed_leftovers,
+    _delete_shard_logs,
     _manifest_from_shard_records,
     _record_finished_shard,
 )
@@ -302,6 +308,15 @@ def test_resume_refuses_unsealed_leftovers(tmp_path) -> None:
     _check_no_unsealed_leftovers(root, ["log_a", "log_b"])
 
 
+def test_force_rebuild_deletes_only_the_shards_logs(tmp_path) -> None:
+    for log_name, sample_key in (("log_a", "uuid1/velocity"), ("log_b", "uuid2/velocity")):
+        with LmdbCacheWriter(tmp_path, log_name) as writer:
+            writer.write(sample_key, encode_tensor(torch.tensor([1.0]), ZlibCodec()))
+    _delete_shard_logs(str(tmp_path), ["log_a", "log_missing"])
+    assert not (tmp_path / "log_a").exists()
+    assert read_cached_tensor_addresses(tmp_path, "log_b") == {"uuid2/velocity"}
+
+
 def test_delete_manifest_unseals_the_store(tmp_path) -> None:
     write_manifest(tmp_path, {"tensors": {}, "cache_signature": {}})
     delete_manifest(tmp_path)
@@ -333,3 +348,38 @@ def test_store_reader_survives_pickling(tmp_path) -> None:
     assert np.allclose(tensors["velocity"].numpy(), [1.0])
     reader.close()
     cloned.close()
+
+
+def test_store_reader_closes_inherited_envs_in_a_forked_child(tmp_path) -> None:
+    """A forked DataLoader worker starts without the parent's envs, which py-lmdb corrupts after a fork, and reopens."""
+    with LmdbCacheWriter(tmp_path, "log_a") as writer:
+        writer.write(
+            "uuid1/velocity",
+            encode_tensor(torch.tensor([1.0]), ZlibCodec()),
+        )
+    write_manifest(
+        tmp_path,
+        {
+            "tensors": {"velocity": ZlibCodec().spec},
+            "cache_signature": {"velocity": {}},
+        },
+    )
+
+    reader = CacheStoreReader(tmp_path, {"velocity": {}})
+    reader.read("log_a", "uuid1")  # opens the env in the parent
+    read_end, write_end = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        try:
+            dropped = reader._envs is None  # pyright: ignore[reportPrivateUsage]
+            tensors = reader.read("log_a", "uuid1")
+            os.write(write_end, b"ok" if dropped and np.allclose(tensors["velocity"].numpy(), [1.0]) else b"no")
+        finally:
+            os._exit(0)
+    os.close(write_end)
+    _, status = os.waitpid(pid, 0)
+    verdict = os.read(read_end, 2)
+    os.close(read_end)
+    reader.close()
+    assert status == 0
+    assert verdict == b"ok"

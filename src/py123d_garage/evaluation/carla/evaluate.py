@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Drives a leaderboard routes file with a garage policy, on the CARLA build in lib/carla."""
 
 from __future__ import annotations

@@ -1,15 +1,24 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../assets/logo_dark.png">
-  <img src="../assets/logo_light.png" alt="Py123d Garage" width="575">
-</picture>
+<img src="../assets/logo.png" alt="Py123d Garage" width="630">
 
 </div>
 
 <h1 align="center">Physical AI AV Dataset</h1>
 
-The NVIDIA AV Dataset License does not allow redistribution, so no 123D version is hosted; you need convert the raw data yourself.
+### Overview
+
+Physical AI AV holds about 1,700 hours of driving from 25 countries and more than 2,500 cities, cut into 20 s clips. Each clip has seven cameras and a 360° lidar, both at 10 Hz in the 123D copy; the training recipe uses the front wide camera. The labels are machine-generated 3D boxes and egomotion, which covers about 140 s around each clip. There are no maps. The license does not allow redistribution, so no sample images are shown here; see the [dataset page](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles).
+
+| Split                  |   Clips | Camera hours | Used for training |
+| :--------------------- | ------: | -----------: | :---------------- |
+| `physical-ai-av_train` | 149,774 |         ~830 | Yes               |
+| `physical-ai-av_val`   |  88,513 |         ~490 | Yes               |
+| `physical-ai-av_test`  |  60,039 |         ~330 | Yes               |
+
+Training uses all three splits, since the closed-loop evaluation runs on NuRec scenes, not on these splits. It skips every clip that NuRec reconstructs: those clips are read through [NuRec](nurec.md), whose validation scenes must stay unseen.
+
+The NVIDIA AV Dataset License does not allow redistribution, so no 123D version is hosted; you need to convert the raw data yourself.
 
 ### Convert to 123D yourself
 
@@ -21,7 +30,7 @@ py123d-conversion datasets=["physical-ai-av"] dataset_paths.physical_ai_av_data_
 
 Write the output to `$PY123D_GARAGE_DATA_ROOT/physical-ai-av/123D`.
 
-Our copy was converted with py123d's `physical-ai-av` parser straight from the Hub's `chunk_*.zip` archives, without extracting them: all three splits, all seven cameras, synced at 10 Hz on the lidar spin grid, ego and box dynamics inferred. Cameras are embedded as JPEG at OpenCV quality 75, lidar spins as laz with 2 cm xyz quantization (`laz_scales: [0.02, 0.02, 0.02]`, the default is 1 cm). Clips that ship without lidar or egomotion, about 4 to 5 percent, are skipped.
+Our copy converts all three splits and all seven cameras, straight from the Hub's `chunk_*.zip` archives. Clips without lidar or egomotion, about 4 to 5 percent, are skipped.
 
 ### Expected layout
 

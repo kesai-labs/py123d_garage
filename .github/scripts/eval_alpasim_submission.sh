@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 # Builds the submission image, serves it, and drives one scene with the challenge dev preset: the flow up to submit_image.sh.
-# Usage: eval_alpasim_submission.sh <checkpoint dir> <scene id> <output dir> <min score> <min meters>
+# Usage: eval_alpasim_submission.sh <checkpoint file> <scene id> <output dir> <min score> <min meters>
 # DRIVE_TIMEOUT_S caps one attempt.
 
 set -euo pipefail
 
-_checkpoint_dir=$1
+_checkpoint_file=$1
 _scene_id=$2
 _out_dir=$3
 _min_score=$4
 _min_meters=$5
 _drive_timeout_s="${DRIVE_TIMEOUT_S:-1800}"
 _attempts=3
-_tag="ci-$(basename "${_checkpoint_dir}")"
+_tag="ci-$(basename "$(dirname "${_checkpoint_file}")")"
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 # Port-block locks live under /tmp so every runner user sees them and parallel jobs never collide.
@@ -43,7 +46,7 @@ scores = {rollout["rollout_id"]: rollout["score"] for rollout in rollouts if rol
 def series(rows, name):
     return rows.filter(pl.col("name") == name).sort("timestamps_us")["values"].to_list()
 
-if scores:
+if scores and (aggregate / "metrics_unprocessed.parquet").exists():
     metrics = pl.read_parquet(aggregate / "metrics_unprocessed.parquet")
     drives = []
     for rollout_id, score in scores.items():
@@ -65,7 +68,7 @@ stop_driver() {
 }
 trap stop_driver EXIT
 
-CHECKPOINT_FILE="${_checkpoint_dir}/model.pth" TAG="${_tag}" bash scripts/alpasim_submission/build_docker_image.sh
+CHECKPOINT_FILE="${_checkpoint_file}" TAG="${_tag}" bash scripts/alpasim_submission/build_docker_image.sh
 
 _drive=""
 for _attempt in $(seq 1 "${_attempts}"); do
@@ -117,7 +120,7 @@ fi
 read -r _score _meters <<<"${_drive}"
 echo "Submission ${_tag} on ${_scene_id}: score ${_score}, minimum ${_min_score}; drove ${_meters} m, minimum ${_min_meters} m"
 if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
-	echo "### submission $(basename "${_checkpoint_dir}") on ${_scene_id}: score ${_score}, drove ${_meters} m, ${_peak}" >>"${GITHUB_STEP_SUMMARY}"
+	echo "### submission $(basename "$(dirname "${_checkpoint_file}")") on ${_scene_id}: score ${_score}, drove ${_meters} m, ${_peak}" >>"${GITHUB_STEP_SUMMARY}"
 fi
 python3 -c "import sys; sys.exit(0 if float('${_score}') >= float('${_min_score}') else 1)" ||
 	{ echo "the score is below the minimum" >&2; exit 1; }

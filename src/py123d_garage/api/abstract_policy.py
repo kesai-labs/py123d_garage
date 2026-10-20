@@ -1,7 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 import abc
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Generic, TypeAlias, TypeVar, cast
 
@@ -39,14 +42,17 @@ if TYPE_CHECKING:
 class CacheTensorSpec:
     """One cached tensor's declaration: its storage codec and the config values its builder reads."""
 
+    # Codec that compresses the tensor in the cache store.
     codec: TensorCodec
-    # Only fields that decide the tensor's shape or content, stringified.
+    # Config values that decide the tensor's shape or content, stringified.
     signature: dict[str, str]
 
 
 FeaturesT = TypeVar("FeaturesT", bound=AbstractFeatures)
 LabelsT = TypeVar("LabelsT", bound=AbstractLabels)
 PredictionsT = TypeVar("PredictionsT", bound=AbstractPredictions)
+# The training's camera augmentation: (stitched images, cameras per row, rows, front camera tile) to augmented images.
+CameraAugmentation: TypeAlias = Callable[[Tensor, int, int, int], Tensor]
 
 
 class AbstractPolicy(
@@ -61,10 +67,10 @@ class AbstractPolicy(
         evaluation_checkpoint_file: str | None = None,
     ) -> None:
         """
-        Builds the model, then strictly loads the evaluation checkpoint when given.
+        Builds the model once before training or inference, then strictly loads the evaluation checkpoint when given.
 
-        Called once before training or inference; evaluation passes the
-        checkpoint.
+        Args:
+            evaluation_checkpoint_file: checkpoint to load for evaluation; None for training.
         """
         self.build_model(from_local_checkpoint=evaluation_checkpoint_file is not None)
         if evaluation_checkpoint_file is None:
@@ -74,8 +80,7 @@ class AbstractPolicy(
             map_location=None if torch.cuda.is_available() else torch.device("cpu"),
             weights_only=True,
         )
-        # Accept both the raw policy state dict (training checkpoints) and a
-        # Lightning checkpoint's "state_dict" entry with its wrapper prefixes.
+        # Accepts a raw policy state dict or a Lightning checkpoint, whose "state_dict" keys carry a "policy." prefix.
         if "state_dict" in state_dict:
             state_dict = {k.removeprefix("policy."): v for k, v in state_dict["state_dict"].items()}
         self.load_state_dict(state_dict, strict=True)
@@ -125,12 +130,11 @@ class AbstractPolicy(
         cached: dict[str, torch.Tensor],
     ) -> FeaturesT:
         """
-        The model's input tensors of one scene, deterministic in the scene.
+        Builds the model's input tensors of one scene, deterministically.
 
         Args:
             scene_api: scene interface anchored at the current frame.
-            cached: tensors already read from the cache store — empty, or complete
-                per cache_codecs. Take cached entries as-is, build the rest.
+            cached: tensors from the cache store (empty or complete) and the session cache (any subset), used as-is.
 
         Returns:
             the single-sample feature bundle, the inference inputs.
@@ -143,38 +147,46 @@ class AbstractPolicy(
         cached: dict[str, torch.Tensor],
     ) -> LabelsT:
         """
-        The ground-truth tensors of one scene, deterministic in the scene. Training only.
+        Builds the ground-truth tensors of one scene for training, deterministically.
 
         Args:
             scene_api: scene interface anchored at the current frame.
-            cached: tensors already read from the cache store — empty, or complete
-                per cache_codecs. Take cached entries as-is, build the rest.
+            cached: tensors from the cache store (empty or complete) and the session cache (any subset), used as-is.
 
         Returns:
             the single-sample label bundle, the supervision of one sample.
         """
 
     @abc.abstractmethod
-    def _cache_specs(self) -> dict[str, CacheTensorSpec]:
+    def _permanent_cache_specs(self) -> dict[str, CacheTensorSpec]:
         """
-        Declare for each cached tensor its codec and signature.
+        Declares the codec and signature of each tensor in the cache store.
 
         Returns:
             spec by tensor name; empty when the policy caches nothing.
         """
 
+    def session_cache_names(self) -> frozenset[str]:
+        """
+        Declares the tensors a training job memoizes per scene and passes in `cached` like the store tensors.
+
+        Returns:
+            tensor names; empty when the policy memoizes nothing.
+        """
+        return frozenset()
+
     def cache_codecs(self) -> dict[str, TensorCodec]:
         """
-        Cache codec of each cached tensor, needed for cache compression and decompression.
+        Cache codec of each cached tensor, used to compress and decompress the store.
 
         Returns:
             codec by tensor name, e.g. {"lidar_feature": PngCodec(quantization_scale=255)}.
         """
-        return {tensor_name: spec.codec for tensor_name, spec in self._cache_specs().items()}
+        return {tensor_name: spec.codec for tensor_name, spec in self._permanent_cache_specs().items()}
 
     def cache_signature(self, dataset: str) -> dict[str, dict[str, str]]:
         """
-        Cache signature of each cached tensor, needed for cache stallness detection and invalidation.
+        Cache signature of each cached tensor, used to detect and invalidate stale stores.
 
         Args:
             dataset: the dataset name of the store's scenes.
@@ -183,7 +195,7 @@ class AbstractPolicy(
             the store's cache signature; empty when the policy caches nothing.
         """
         del dataset
-        return {tensor_name: spec.signature for tensor_name, spec in self._cache_specs().items()}
+        return {tensor_name: spec.signature for tensor_name, spec in self._permanent_cache_specs().items()}
 
     @abc.abstractmethod
     def compute_loss(
@@ -205,16 +217,32 @@ class AbstractPolicy(
     @abc.abstractmethod
     def loss_weights(self, epoch: int) -> dict[str, float]:
         """
-        Loss weights for one epoch, keyed like compute_loss, summing to one.
-
-        Normalize with normalize_loss_weights; disabled heads carry weight zero.
+        Loss weights for one epoch, keyed like compute_loss, with zero for disabled heads and normalized to sum to one.
 
         Args:
-            epoch: current training epoch
+            epoch: current training epoch.
 
         Returns:
-            the weight of every per-task loss
+            the weight of every per-task loss.
         """
+
+    def on_train_epoch_start(self, epoch: int) -> list[torch.nn.Parameter]:
+        """
+        Per-epoch training hook, run before the epoch's first step.
+
+        State it changes must change in place: a recorded training step keeps reading the same tensors.
+
+        Args:
+            epoch: the epoch about to start.
+
+        Returns:
+            the parameters it re-initialized; the trainer clears their optimizer moments.
+        """
+        del epoch
+        return []
+
+    def prepare_training(self) -> None:
+        """Applies training-only changes to the built model, such as custom kernels, once after initialize."""
 
     def compute_trajectory(
         self,
@@ -292,29 +320,22 @@ class AbstractPolicy(
             .astype(np.float64),
         )
 
-        num_steps = self.policy_config.trajectory_num_steps
-        interval_us = self.policy_config.trajectory_interval_us
+        offsets_us = np.array(self.policy_config.trajectory_offsets_us, dtype=np.int64)
 
-        # Basic sanity test
-        if poses_se2_batch.shape[1] != num_steps:
+        if poses_se2_batch.shape[1] != len(offsets_us):
             raise ValueError(
                 f"{type(self).__name__} predicted {poses_se2_batch.shape[1]} poses, but its "
-                f"config asks for {num_steps} "
-                f"(horizon_us {self.policy_config.trajectory_horizon_us}, interval_us {interval_us}).",
+                f"config asks for {len(offsets_us)} "
+                f"(offsets_us {self.policy_config.trajectory_offsets_us}).",
             )
 
-        # Create timestamps for trajectory points, relative to the scene's initial ego state timestamp.
         trajectories: list[TrajectorySE2] = []
         for batch_index, scene_api in enumerate(scene_apis):
             ego_state_se3: EgoStateSE3 | None = scene_api.get_ego_state_se3_at_iteration(0)
             assert ego_state_se3 is not None, "Ego state should be available for trajectory computation!"
-            timestamps: np.ndarray[tuple[int], np.dtype[np.signedinteger]] = (
-                ego_state_se3.timestamp.time_us
-                + np.arange(
-                    1,
-                    num_steps + 1,
-                )
-                * interval_us
+            timestamps = cast(
+                "np.ndarray[tuple[int], np.dtype[np.signedinteger]]",
+                ego_state_se3.timestamp.time_us + offsets_us,
             )
             trajectories.append(
                 TrajectorySE2(
@@ -325,7 +346,12 @@ class AbstractPolicy(
         return trajectories
 
     def get_training_callbacks(self) -> list[L.Callback]:
-        """Returns the lightning callbacks used during training; empty by default."""
+        """
+        Lightning callbacks the policy adds to training; empty by default.
+
+        Returns:
+            the callbacks.
+        """
         return []
 
     def compute_metrics(
@@ -359,7 +385,8 @@ class AbstractPolicy(
         Args:
             benchmark_config: the benchmark about to score this policy; None = nothing to verify.
             offline_data_source_config: the source about to feed this policy; None = nothing to verify.
-            scene_filter: the filter about to select scenes for this policy; None = nothing to verify.
+            scene_filter: the filter about to select scenes for this policy; None = nothing to verify. With a
+                benchmark_config, its scored-scene guarantees replace the training ones the labels need.
 
         Raises:
             ValueError: on the first declaration this policy cannot meet.
@@ -369,21 +396,25 @@ class AbstractPolicy(
         if offline_data_source_config is not None:
             verify_policy_against_offline_data_source(self.policy_config, offline_data_source_config)
         if scene_filter is not None:
-            verify_policy_against_scene_filter(self.policy_config, scene_filter)
+            verify_policy_against_scene_filter(
+                self.policy_config,
+                scene_filter,
+                required_future_us=benchmark_config.scored_scene_future_duration_us if benchmark_config else None,
+                route_required=benchmark_config.scored_scene_needs_route if benchmark_config else True,
+            )
 
-    def augment_features(self, features: FeaturesT) -> FeaturesT:
+    def augment_features(self, features: FeaturesT, augment_camera: CameraAugmentation) -> FeaturesT:
         """
-        Augments a collated feature batch on device; no-op by default.
-
-        Runs after the cache store (so stored tensors stay un-augmented) and outside any
-        torch.compile graph. Training batches only.
+        Augments a collated training batch on device, after the cache store and outside torch.compile; no-op by default.
 
         Args:
             features: the batched feature bundle, already on the training device.
+            augment_camera: the training's camera augmentation, called with the stitched camera image's layout.
 
         Returns:
             the features to train on.
         """
+        del augment_camera
         return features
 
     def visualize_batch(
@@ -395,17 +426,17 @@ class AbstractPolicy(
         scene_api: SceneAPI,
     ) -> dict[str, Tensor]:
         """
-        Renders named visualization images (uint8 HWC) for a batch; empty means no visuals.
+        Renders named visualization images of a batch's first sample for logging; no visuals by default.
 
-        Called by VisualizationCallback
-        on train/validation samples — the callback moves tensors and logs, the rendering
-        knowledge lives with the policy. Default: no visualization.
+        Args:
+            features: batched feature bundle.
+            labels: batched label bundle; None where no ground truth exists, e.g. in a simulator.
+            navigation: batched navigation conditioning.
+            predictions: prediction bundle from forward.
+            scene_api: the first sample's scene, for overlays no tensor carries, such as the ego box and route.
 
-        The scene is the first sample's, the one every renderer draws; overlays that
-        no tensor carries (the ego box, the map route) are read from it.
-
-        Labels are None wherever no ground truth exists, e.g. driving a simulator;
-        views that need them are then left out.
+        Returns:
+            uint8 HWC images by name; empty means no visuals.
         """
         return {}
 

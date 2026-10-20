@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,10 +13,7 @@ from py123d_garage.config.schema.policy.vavam_config import VavamConfig
 
 @dataclass
 class PolicyConfig:
-    """
-    The policy to build; each policy reads its own block, constructed by
-    whatever selects the target.
-    """
+    """The policy to build; each policy reads its own config block."""
 
     # -- Config objects --
 
@@ -31,12 +31,10 @@ class PolicyConfig:
 
 @dataclass
 class EvaluationPolicyConfig(PolicyConfig):
-    """The policy under evaluation; training builds a plain PolicyConfig, which carries neither file."""
+    """The policy under evaluation, with the checkpoint and sensor rig files it loads."""
 
-    # Evaluation checkpoint file; the policy loads its weights from here.
-    evaluation_checkpoint_file: str = MISSING
+    # Checkpoint files: one loads the policy's weights, several average an ensemble of one recipe.
+    evaluation_checkpoint_files: list[str] = MISSING
 
-    # YAML file path of the sensor rig; the benchmark can build its served sensor rig from this file.
-    # Trained policies save those files next to the checkpoint; each file belongs to a data source.
-    # Those YAML files can be edited to evaluate the policy with a different sensor rig than it was trained with.
+    # Sensor rig YAML saved next to the checkpoint, from which the benchmark builds its served rig; edit it to change the rig.
     evaluation_sensor_rig_file: str | None = None

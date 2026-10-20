@@ -22,19 +22,18 @@ def resample_trajectory_se2(
     add_initial_ego_pose: bool = True,
 ) -> TrajectorySE2:
     """
-    Resample a trajectory to the given trajectory grid.
+    Resamples a trajectory onto a trajectory grid starting at the ego timestamp.
 
     Args:
-        trajectory: input trajectory
-        trajectory_grid: target sampling grid of the resampled trajectory
-        initial_ego_state_se2: initial ego state as SE2
-        convert_to_absolute: if True, convert the input from ego-relative to absolute poses first, defaults to False
-        add_initial_ego_pose: if True, include the initial ego pose as the first sample, defaults to True
+        trajectory: Trajectory to resample.
+        trajectory_grid: Grid of the resampled trajectory.
+        initial_ego_state_se2: Current ego state, the origin of the grid.
+        convert_to_absolute: Whether the input poses are ego-relative and need converting to absolute poses.
+        add_initial_ego_pose: Whether the current ego pose is the first sample.
 
     Returns:
-        resampled trajectory as SE2
+        The resampled trajectory.
     """
-
     if convert_to_absolute:
         _trajectory = TrajectorySE2(
             pose_se2_array=rel_to_abs_se2_array(
@@ -46,8 +45,7 @@ def resample_trajectory_se2(
     else:
         _trajectory = trajectory
 
-    # NOTE @DanielDauner: The PDM modules expect the trajectory to start at the current ego timestamp/iteration.
-    # If the first timestamp of the trajectory is larger than the ego timestamp, we concat the initial ego pose/timestamp.
+    # PDM expects the trajectory to start at the current ego timestamp.
     ego_timestamp = initial_ego_state_se2.timestamp.time_us
     if int(_trajectory.timestamps_us[0]) > initial_ego_state_se2.timestamp.time_us:
         initial_ego_se2_array = initial_ego_state_se2.rear_axle_se2.array

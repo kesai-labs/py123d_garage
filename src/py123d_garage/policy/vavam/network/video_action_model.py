@@ -2,6 +2,8 @@
 # Copyright (c) 2025 Valeo
 # Adapted from valeoai/VideoActionModel (MIT License).
 
+"""VaVAM video-action model: flow matching of driving actions on top of a GPT2 video model."""
+
 import logging
 import os
 from collections import OrderedDict
@@ -22,6 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 def instantiate(config: OmegaConf) -> nn.Module:
+    """
+    Builds a MupGPT2 or MupActionExpert from a Hydra-style config without importing its _target_.
+
+    Args:
+        config: config whose _target_ names the class and whose other keys are its arguments.
+
+    Returns:
+        the built module.
+    """
     targets = {"MupGPT2": MupGPT2, "MupActionExpert": MupActionExpert}
     kwargs = {key: value for key, value in dict(config).items() if not key.startswith("_")}
     return targets[str(config["_target_"]).rsplit(".", 1)[-1]](**kwargs)
@@ -30,13 +41,7 @@ mupShapes = str | Dict[str, Tuple[int, ...]]
 
 
 class VideoActionModel(nn.Module):
-    """
-    This module coordinates the training of a JointModel.
-
-    Notable it implements:
-    - the flow matching loss for action prediction.
-    - The denoise diffusion process for action prediction.
-    """
+    """Wraps a JointModel with the flow-matching loss and the Euler sampler for actions."""
 
     def __init__(
         self,
@@ -52,16 +57,29 @@ class VideoActionModel(nn.Module):
         final_action_clip_value: float | None = None,
         action_scaling: float = 1.0,
     ) -> None:
+        """
+        Builds the video model, the action expert and the joint model around them.
+
+        Args:
+            gpt_config: config of the GPT2 video model.
+            gpt_mup_base_shapes: muP base shapes of the video model.
+            gpt_checkpoint_path: checkpoint to load the frozen video model from; None initializes it.
+            action_config: config of the action expert.
+            action_mup_base_shapes: muP base shapes of the action expert.
+            action_checkpoint_path: checkpoint to load the frozen action expert from; None initializes it.
+            finetuning_timesteps: number of context frames in training.
+            num_inference_steps: number of Euler steps at inference.
+            flow_sig_min: minimum noise level of the flow path.
+            final_action_clip_value: bound on the sampled actions before rescaling; None disables clipping.
+            action_scaling: factor between model-space and real actions.
+        """
         super().__init__()
-        # My parameters
         self.num_inference_steps = num_inference_steps
         self.flow_sig_min = flow_sig_min
         self.final_action_clip_value = final_action_clip_value
         self.context_length = finetuning_timesteps
         self.action_scaling = action_scaling
 
-        # Load the models
-        ## Video generation model
         self.gpt: MupGPT2 = instantiate(gpt_config)
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
         if gpt_checkpoint_path is not None:
@@ -76,7 +94,6 @@ class VideoActionModel(nn.Module):
             logger.info(f"Initializing GPT2 from scratch, with mup {gpt_mup_base_shapes}")
             set_base_shapes(self.gpt, gpt_mup_base_shapes)
             self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
-        ## Action model
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
         if action_checkpoint_path is not None:
@@ -91,13 +108,10 @@ class VideoActionModel(nn.Module):
             logger.info(f"Initializing Action Expert from scratch, with mup {action_mup_base_shapes}")
             set_base_shapes(self.action_expert, action_mup_base_shapes)
             self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
-        ## Joint model
         self.joint_model = JointModel(self.gpt, self.action_expert)
 
-        # Video generation parameters
         self.nb_tokens_per_timestep = self.gpt.nb_tokens_per_timestep
 
-        # Action parameters
         self.action_dim = self.action_expert.action_dim
         self.action_horizon = self.action_expert.action_horizon
         self.action_hidden_dim = self.action_expert.embedding_dim
@@ -105,9 +119,18 @@ class VideoActionModel(nn.Module):
         self.build_attention_mask()
 
     def _load_ckpt(self, ckpt: str, key: str | None) -> OrderedDict:
+        """
+        Reads a checkpoint's state dict, stripping a key prefix when given.
+
+        Args:
+            ckpt: checkpoint path; ~ and environment variables are expanded.
+            key: prefix to remove from every key, or None to keep the keys.
+
+        Returns:
+            the state dict.
+        """
         ckpt = torch.load(os.path.expanduser(os.path.expandvars(ckpt)), map_location="cpu")
         if key is not None:
-            # We need to remove the prefix "network." from the keys of the state_dict
             state_dict = OrderedDict()
             for k, v in ckpt["state_dict"].items():
                 state_dict[k.replace(key, "")] = v
@@ -117,58 +140,26 @@ class VideoActionModel(nn.Module):
 
     def build_attention_mask(self) -> None:
         """
-        Builds the attention mask for the joint model.
-
-        - Causal attention mask for the visual tokens.
-        - Bi-directional attention mask for the action tokens withing the action horizon.
-        - Full-attention between the action tokens and the visual tokens of the context.
-
-        Attention mask (this same for each sample of the batch, so we ignore the batch dimension for visualazation).
-
-        For a max context length of 3 and 3 tokens per image and an action horizon of 2, the mask looks like this:
-
-        V11 V12 V13 V21 V22 V23 V31 V32 V33 H11 H12 H21 H22 H31 H32
-         x
-         x   x
-         x   x   x
-         x   x   x   x
-         x   x   x   x   x
-         x   x   x   x   x   x
-         x   x   x   x   x   x   x
-         x   x   x   x   x   x   x   x
-         x   x   x   x   x   x   x   x   x
-
-         x   x   x                          x    x
-         x   x   x                          x    x
-         x   x   x   x   x   x                       x    x
-         x   x   x   x   x   x                       x    x
-         x   x   x   x   x   x   x   x                       x    x
-         x   x   x   x   x   x   x   x                       x    x
+        Registers the training mask: causal over visual tokens; each frame's action chunk sees itself and the frames up to it.
         """
         context_length = self.context_length
         action_horizon = self.action_horizon
         nb_tokens_per_timestep = self.nb_tokens_per_timestep
 
-        # Number of visual tokens in the entire sequence
         visual_seqlen = self.nb_tokens_per_timestep * self.context_length
-        # Number of action tokens in the entire sequence
         action_seq_len = self.action_horizon * self.context_length
-        # Total number of tokens in the sequence
         seqlen = visual_seqlen + action_seq_len
         attn_mask = torch.zeros(seqlen, seqlen, dtype=torch.bool)
 
-        # Causal mask for the visual tokens
         for i in range(visual_seqlen):
             attn_mask[i, : i + 1] = True
 
-        # Bi-directional mask for each set of action tokens
         for i in range(context_length):
             attn_mask[
                 visual_seqlen + i * action_horizon : visual_seqlen + (i + 1) * action_horizon,
                 visual_seqlen + i * action_horizon : visual_seqlen + (i + 1) * action_horizon,
             ] = True
 
-        # Actions tokens at timestep t can attend to visual tokens at timestep <= t
         for i in range(context_length):
             attn_mask[
                 visual_seqlen + i * action_horizon : visual_seqlen + (i + 1) * action_horizon,
@@ -179,21 +170,23 @@ class VideoActionModel(nn.Module):
 
     def build_inference_attention_mask(self, context_length: int, device: torch.device | str) -> BoolTensor:
         """
-        Builds the attention mask for the joint model during inference.
+        Builds the inference mask: causal over visual tokens, and one action chunk that sees everything.
 
-        - Causal attention mask for the visual tokens.
-        - Full attention for the actions tokens
+        Args:
+            context_length: number of context frames.
+            device: device of the mask.
+
+        Returns:
+            the boolean mask, True where attention is allowed.
         """
         visual_seqlen = self.nb_tokens_per_timestep * context_length
-        action_seq_len = self.action_horizon  # this time we predict only one step
+        action_seq_len = self.action_horizon
         seqlen = visual_seqlen + action_seq_len
         attn_mask = torch.zeros(seqlen, seqlen, dtype=torch.bool, device=device)
 
-        # Causal mask for the visual tokens
         for i in range(visual_seqlen):
             attn_mask[i, : i + 1] = True
 
-        # Bi-directional mask for the action tokens + action tokens can attend to all visual tokens
         attn_mask[visual_seqlen:] = True
 
         return attn_mask
@@ -204,8 +197,18 @@ class VideoActionModel(nn.Module):
         x1: Tensor,
         t: Tensor,
     ) -> Tensor:
-        """Conditional Flow"""
-        t = t[:, :, None, None]  # (B, finetuning_timesteps, 1, 1)
+        """
+        Interpolates between noise and target actions along the conditional flow path.
+
+        Args:
+            x: noise shaped [batch, context, horizon, action_dim].
+            x1: target actions with the same shape.
+            t: flow time shaped [batch, context].
+
+        Returns:
+            the noisy actions at time t.
+        """
+        t = t[:, :, None, None]
         return (1 - (1 - self.flow_sig_min) * t) * x + t * x1
 
     def forward(
@@ -216,9 +219,19 @@ class VideoActionModel(nn.Module):
         t: Tensor,
         return_gpt: bool = False,
     ) -> Tensor:
-        """Flow matching loss for action prediction"""
-        # noisy action
-        # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
+        """
+        Computes the flow-matching loss of the action expert.
+
+        Args:
+            visual_tokens: token ids shaped [batch, context, height, width].
+            high_level_command: command ids shaped [batch, context].
+            actions: target actions shaped [batch, context, horizon, action_dim].
+            t: flow time shaped [batch, context].
+            return_gpt: whether the joint model also computes the GPT2 outputs.
+
+        Returns:
+            the mean squared error between predicted and true velocities.
+        """
         x0 = torch.randn_like(actions, device=actions.device, dtype=actions.dtype)
         x1 = actions / self.action_scaling
         psi_t = self.psi_t(x0, x1, t.type_as(x1))
@@ -235,7 +248,6 @@ class VideoActionModel(nn.Module):
             return_gpt=return_gpt,
         )["actions"]
 
-        # compare to true velocity
         d_psi = x1 - (1 - self.flow_sig_min) * x0
         return torch.mean((v_psi - d_psi) ** 2)
 
@@ -250,9 +262,19 @@ class VideoActionModel(nn.Module):
         store_intermediate_states: bool = False,
     ) -> Tensor:
         """
-        Inference for action prediction.
+        Samples the actions of the last context frame by Euler integration of the flow from random noise.
 
-        We start from a random action and integrate the dynamics using a forward Euler scheme.
+        Args:
+            visual_tokens: token ids shaped [batch, context, height, width].
+            high_level_command: command ids shaped [batch, 1].
+            dtype: dtype of the noise and flow time.
+            verbose: whether to show a progress bar.
+            num_inference_steps: number of Euler steps; None uses the model default.
+            final_action_clip_value: bound on the actions before rescaling; None uses the model default.
+            store_intermediate_states: whether to also return the actions after every step.
+
+        Returns:
+            the actions shaped [batch, 1, horizon, action_dim], plus the per-step actions when asked.
         """
         device = visual_tokens.device
         bsz, context_length, *_ = visual_tokens.size()
@@ -261,7 +283,7 @@ class VideoActionModel(nn.Module):
         final_action_clip_value = final_action_clip_value or self.final_action_clip_value
 
         def _post_process_traj(action: Tensor) -> Tensor:
-            # clamp final output if specified
+            """Clips the actions when configured and undoes the action scaling."""
             if final_action_clip_value is not None:
                 action = torch.clamp(
                     action,
@@ -270,18 +292,14 @@ class VideoActionModel(nn.Module):
                 )
             return action * self.action_scaling
 
-        # sample pure action noise
         action = torch.randn((bsz, 1, self.action_horizon, self.action_dim), device=device, dtype=dtype)
         intermediate_states = []
 
-        # attn_mask for inference
         attn_mask = self.build_inference_attention_mask(context_length, device=device)
 
-        # Init KV cache
         self.joint_model.eval()
         self.joint_model.init_kv_cache()
 
-        # forward euler integration ---
         delta_t = 1.0 / num_inference_steps
         t = torch.zeros((bsz, 1), device=device, dtype=dtype)
         for _ in tqdm(range(num_inference_steps), "Euler integration", disable=not verbose):
@@ -294,15 +312,12 @@ class VideoActionModel(nn.Module):
                     "diffusion_step": t,
                 },
             )["actions"]
-            # decode action: [Batch_Size, Horizon_Steps, Action_Dim]
             action += delta_t * action_vel
             t += delta_t
 
             if store_intermediate_states:
-                # store intermediate states
                 intermediate_states.append(_post_process_traj(action.clone()))
 
-        # cleanup KV cache
         self.joint_model.cleanup_kv_cache()
 
         if store_intermediate_states:
@@ -312,17 +327,38 @@ class VideoActionModel(nn.Module):
 
 
 class VideoActionModelInference(VideoActionModel):
-    """Helper class to perform inference with the VideoActionModel model."""
+    """VideoActionModel whose forward samples actions instead of computing the loss."""
 
     def forward(self, *args, **kwargs) -> Tensor:
+        """
+        Samples actions, see forward_inference.
+
+        Args:
+            *args: positional arguments of forward_inference.
+            **kwargs: keyword arguments of forward_inference.
+
+        Returns:
+            the sampled actions.
+        """
         return super().forward_inference(*args, **kwargs)
 
 
 def load_inference_VAM(
     checkpoint_path: str, device: torch.device | str = "cuda", tempdir: Optional[str] = None,
 ) -> VideoActionModelInference:
+    """
+    Loads a frozen VideoActionModelInference in eval mode from a Lightning or DeepSpeed checkpoint.
+
+    Args:
+        checkpoint_path: checkpoint file, or a DeepSpeed checkpoint directory.
+        device: device to move the model to.
+        tempdir: parent directory for the temporary fused DeepSpeed checkpoint.
+
+    Returns:
+        the loaded model.
+    """
     if os.path.isdir(checkpoint_path):
-        # This is a deepspeed checkpoint
+        # A directory is a DeepSpeed checkpoint.
         import tempfile
 
         from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict

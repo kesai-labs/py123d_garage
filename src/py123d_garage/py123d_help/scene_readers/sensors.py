@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Camera frames and LiDAR sweeps: the recorded streams, read at the anchor or back through the past."""
 
 from __future__ import annotations
@@ -54,7 +57,17 @@ def lidar_at_timestamp(
     timestamp_us: int,
     criteria: Literal["nearest", "backward"] = "nearest",
 ) -> LidarSweep | None:
-    """The merged LiDAR matching a timestamp, falling back to the top LiDAR."""
+    """
+    Reads the merged LiDAR matching a timestamp, falling back to the top LiDAR.
+
+    Args:
+        scene_api: the scene to read.
+        timestamp_us: the target timestamp.
+        criteria: how a recorded sweep is matched to the timestamp.
+
+    Returns:
+        the matching sweep, or None when neither LiDAR has one.
+    """
     lidar = scene_api.get_lidar_at_timestamp(timestamp_us, LidarID.LIDAR_MERGED, criteria=criteria)
     if lidar is None:
         lidar = scene_api.get_lidar_at_timestamp(timestamp_us, LidarID.LIDAR_TOP, criteria=criteria)
@@ -62,7 +75,15 @@ def lidar_at_timestamp(
 
 
 def lidar_at_anchor(scene_api: SceneAPI) -> LidarSweep | None:
-    """The merged LiDAR of the anchor iteration, falling back to the top LiDAR."""
+    """
+    Reads the merged LiDAR of the anchor iteration, falling back to the top LiDAR.
+
+    Args:
+        scene_api: scene interface anchored at the current frame.
+
+    Returns:
+        the anchor sweep, or None when neither LiDAR recorded one.
+    """
     lidar = scene_api.get_lidar_at_iteration(0, LidarID.LIDAR_MERGED)
     if lidar is None:
         lidar = scene_api.get_lidar_at_iteration(0, LidarID.LIDAR_TOP)
@@ -108,9 +129,6 @@ def sample_lidar_stack(
     """
     The anchor LiDAR sweep followed by the past sweeps the stream could serve, newest first.
 
-    Offsets the stream had not started for are dropped, so the stack is shorter near the
-    beginning of a log or an episode; a dropout inside recorded coverage still raises.
-
     Args:
         scene_api: scene interface anchored at the current frame
         horizon_us: how far back the oldest sweep reaches
@@ -139,12 +157,7 @@ def accumulate_lidar_in_anchor_frame(
     """
     The LiDAR stack concatenated into one cloud, past sweeps moved into the anchor frame.
 
-    Every sweep is recorded from where the ego stood at the time, so stacking them raw
-    smears the scene. Each past sweep is moved by the SE2 step between the ego pose
-    interpolated at its own recorded timestamp and the pose at the anchor's; the ego's
-    roll, pitch and height change, and the ego's motion within a single sweep, are not
-    modelled. Callers that want the sweeps apart, or a different correction, take
-    sample_lidar_stack instead.
+    The correction is the SE2 ego motion between sweeps; roll, pitch, height and in-sweep motion are not modelled.
 
     Args:
         scene_api: scene interface anchored at the current frame
@@ -168,7 +181,6 @@ def accumulate_lidar_in_anchor_frame(
 
     points: list[jt.Float32[npt.NDArray[np.float32], "num_points 3"]] = [sweeps[0].xyz]
     for sweep, pose_se2 in zip(sweeps[1:], poses_se2[1:], strict=True):
-        # Pose of the past ego frame expressed in the anchor frame.
         past_in_anchor = abs_to_rel_se2(anchor_se2, PoseSE2.from_array(pose_se2))
         corrected = sweep.xyz.copy()
         corrected[:, :2] = rel_to_abs_points_2d_array(
@@ -228,6 +240,16 @@ def sample_past_camera(
     """
 
     def fetch(timestamp_us: int, criteria: Literal["nearest", "backward"]) -> CameraFrame | None:
+        """
+        Reads the camera's frame matching a timestamp.
+
+        Args:
+            timestamp_us: the target timestamp.
+            criteria: how a recorded frame is matched to the timestamp.
+
+        Returns:
+            the matching frame, or None.
+        """
         return scene_api.get_camera_at_timestamp(timestamp_us, camera_id, criteria=criteria)
 
     return _sample_past_stream(

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for the CARLA localization math: compass preprocessing and inverse GPS projections."""
 
 from __future__ import annotations

@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
+"""Codecs that encode one sample tensor into a stored record and back."""
+
 from __future__ import annotations
 
 import io
@@ -14,8 +20,7 @@ from py123d.common.io.camera.jpeg_camera_io import decode_image_from_jpeg_binary
 from py123d.common.io.camera.png_camera_io import decode_image_from_png_binary
 from typing_extensions import override
 
-# Keys inside an encoded record, kept short because they repeat once per stored tensor.
-# The values persist in every built store -- never change them.
+# Keys inside an encoded record; every built store holds them, so never change them.
 _CODEC: Final[str] = "c"
 _DTYPE: Final[str] = "d"
 _SHAPE: Final[str] = "s"
@@ -26,6 +31,7 @@ _PARAMS: Final[str] = "p"
 class TensorCodec:
     """Encodes a single tensor to bytes and back."""
 
+    # Codec name written into every record and used to pick the decoder.
     name: str
 
     @property
@@ -64,10 +70,28 @@ class TensorCodec:
 
 
 def _dtype_of(entry: Mapping[str, Any]) -> np.dtype[np.generic]:
+    """
+    Read the stored tensor's dtype from its entry.
+
+    Args:
+        entry: the encoded entry
+
+    Returns:
+        the tensor's numpy dtype
+    """
     return cast(np.dtype[np.generic], np.dtype(entry[_DTYPE]))
 
 
 def _tensor_to_array(tensor: torch.Tensor) -> npt.NDArray[np.generic]:
+    """
+    Copy a tensor to a CPU numpy array.
+
+    Args:
+        tensor: the tensor to convert
+
+    Returns:
+        the tensor's values as a numpy array
+    """
     return cast(
         npt.NDArray[np.generic],
         tensor.detach().cpu().numpy(),  # pyright: ignore[reportUnknownMemberType]
@@ -75,20 +99,28 @@ def _tensor_to_array(tensor: torch.Tensor) -> npt.NDArray[np.generic]:
 
 
 class ZlibCodec(TensorCodec):
-    """zlib-compressed raw buffer. Lossless for every dtype; shrinks sparse arrays."""
+    """Lossless zlib-compressed raw buffer for any dtype."""
 
     name = "zlib"
 
     def __init__(self, level: int = 1) -> None:
+        """
+        Set the compression level.
+
+        Args:
+            level: zlib compression level, 0 to 9
+        """
         self._compression_level = int(level)
 
     @property
     @override
     def params(self) -> dict[str, Any]:
+        """The codec's constructor keyword arguments."""
         return {"level": self._compression_level}
 
     @override
     def encode(self, tensor: torch.Tensor) -> dict[str, Any]:
+        """Encode one tensor as a zlib-compressed buffer."""
         array = _tensor_to_array(tensor)
         return {
             _CODEC: self.name,
@@ -102,6 +134,7 @@ class ZlibCodec(TensorCodec):
 
     @override
     def decode(self, entry: Mapping[str, Any]) -> torch.Tensor:
+        """Decode one zlib entry."""
         # np.frombuffer returns a read-only view; torch needs it writable, hence the copy.
         array = np.frombuffer(
             zlib.decompress(entry[_BYTES]),
@@ -111,7 +144,15 @@ class ZlibCodec(TensorCodec):
 
 
 def _to_image_array(array: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
-    """Reshape a (H, W), (1, H, W) or (3, H, W) array into what PIL expects."""
+    """
+    Reshape a (H, W), (1, H, W) or (3, H, W) array into the layout PIL expects.
+
+    Args:
+        array: the quantized tensor values
+
+    Returns:
+        the image as (H, W) or (H, W, 3)
+    """
     if array.ndim == 2:
         return array
     if array.ndim == 3 and array.shape[0] == 1:
@@ -130,9 +171,14 @@ def _from_image_array(
     """
     Invert _to_image_array back to the tensor's original shape.
 
-    A decoder may hand back a grayscale image expanded to three identical channels,
-    so a single-channel tensor keeps only the first.
+    Args:
+        image: the decoded image
+        shape: the tensor's original shape
+
+    Returns:
+        the image values in the tensor's original shape
     """
+    # A decoder may expand a grayscale image to three identical channels.
     channels = shape[0] if len(shape) == 3 else 1
     if image.ndim == 3 and channels == 1:
         image = image[..., 0]
@@ -142,26 +188,36 @@ def _from_image_array(
 
 
 class _ImageCodec(TensorCodec):
-    """
-    Shared 8-bit value quantization: u8 = round(value * quantization_scale).
-
-    Maps the tensor's values onto uint8 pixels, never its spatial size:
-    quantization_scale=255 for a tensor normalized to [0, 1];
-    quantization_scale=1 for one already holding uint8-ranged values.
-    """
+    """Base for image codecs that store each value as a uint8 pixel, round(value * quantization_scale)."""
 
     def __init__(self, quantization_scale: float = 255.0) -> None:
+        """
+        Set the value-to-pixel scale.
+
+        Args:
+            quantization_scale: 255 for tensors in [0, 1], 1 for tensors already holding uint8 values
+        """
         self._quantization_scale = float(quantization_scale)
 
     @property
     @override
     def params(self) -> dict[str, Any]:
+        """The codec's constructor keyword arguments."""
         return {"quantization_scale": self._quantization_scale}
 
     def _quantize(
         self,
         tensor: torch.Tensor,
     ) -> tuple[npt.NDArray[np.generic], npt.NDArray[np.uint8]]:
+        """
+        Scale, round and clip a tensor's values to uint8.
+
+        Args:
+            tensor: the tensor to quantize
+
+        Returns:
+            the tensor as a numpy array and its quantized uint8 copy
+        """
         array = _tensor_to_array(tensor)
         quantized = np.clip(
             np.rint(array.astype(np.float64) * self._quantization_scale),
@@ -175,6 +231,16 @@ class _ImageCodec(TensorCodec):
         image: npt.NDArray[np.uint8],
         entry: Mapping[str, Any],
     ) -> torch.Tensor:
+        """
+        Rebuild the tensor from its decoded image.
+
+        Args:
+            image: the decoded uint8 image
+            entry: the encoded entry holding the shape, dtype and scale
+
+        Returns:
+            the reconstructed tensor
+        """
         quantization_scale = entry[_PARAMS]["quantization_scale"]
         array: npt.NDArray[np.generic] = _from_image_array(
             image,
@@ -192,6 +258,7 @@ class PngCodec(_ImageCodec):
 
     @override
     def encode(self, tensor: torch.Tensor) -> dict[str, Any]:
+        """Encode one tensor as a PNG, raising if quantization would lose information."""
         array, quantized = self._quantize(tensor)
         restored = (
             quantized.astype(np.float64) / self._quantization_scale if self._quantization_scale != 1.0 else quantized
@@ -219,6 +286,7 @@ class PngCodec(_ImageCodec):
 
     @override
     def decode(self, entry: Mapping[str, Any]) -> torch.Tensor:
+        """Decode one PNG entry."""
         return self._dequantize(
             decode_image_from_png_binary(entry[_BYTES]),
             entry,
@@ -235,16 +303,25 @@ class JpegCodec(_ImageCodec):
         quality: int = 90,
         quantization_scale: float = 255.0,
     ) -> None:
+        """
+        Set the JPEG quality and value-to-pixel scale.
+
+        Args:
+            quality: JPEG quality passed to PIL
+            quantization_scale: 255 for tensors in [0, 1], 1 for tensors already holding uint8 values
+        """
         super().__init__(quantization_scale=quantization_scale)
         self._quality = int(quality)
 
     @property
     @override
     def params(self) -> dict[str, Any]:
+        """The codec's constructor keyword arguments."""
         return super().params | {"quality": self._quality}
 
     @override
     def encode(self, tensor: torch.Tensor) -> dict[str, Any]:
+        """Encode one tensor as a JPEG."""
         array, quantized = self._quantize(tensor)
         buffer = io.BytesIO()
         Image.fromarray(_to_image_array(quantized)).save(
@@ -262,8 +339,8 @@ class JpegCodec(_ImageCodec):
 
     @override
     def decode(self, entry: Mapping[str, Any]) -> torch.Tensor:
-        # py123d's reader, so a faster decoder installed via its set_jpeg_decoder also
-        # serves the cache. Returns RGB, the order the encoder wrote.
+        """Decode one JPEG entry."""
+        # py123d's reader, so a decoder installed with its set_jpeg_decoder also serves the cache.
         return self._dequantize(
             decode_image_from_jpeg_binary(entry[_BYTES]),
             entry,
@@ -296,7 +373,7 @@ def encode_tensor(tensor: torch.Tensor, codec: TensorCodec) -> bytes:
 
 def decode_tensor(blob: bytes) -> torch.Tensor:
     """
-    Rebuild one stored tensor. The record names its own codec and parameters.
+    Rebuild one stored tensor from its record, which names its own codec and parameters.
 
     Args:
         blob: the pickled record
@@ -310,6 +387,5 @@ def decode_tensor(blob: bytes) -> torch.Tensor:
         raise ValueError(
             f"record uses unknown codec {codec_name!r}; available: {sorted(_CODEC_TYPES)}",
         )
-    # Codecs are stateless at decode time: every parameter lives in the entry.
     codec = _CODEC_TYPES[codec_name](**entry.get(_PARAMS, {}))
     return codec.decode(entry)

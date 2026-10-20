@@ -3,13 +3,9 @@
 # Copyright (c) 2025 Brayden Zhang
 
 """
-Trajectory Optimization for VAM Driver.
+Smooths predicted trajectories with a classical optimizer under comfort limits.
 
-Post-processes predicted trajectories using classical optimization for
-smoothness and comfort constraint enforcement.
-
-Code adapted from: https://drive.google.com/file/d/1u-Hmpc304HySIXZwrptJnPQTT3fbC1Jz/view
-
+Adapted from https://drive.google.com/file/d/1u-Hmpc304HySIXZwrptJnPQTT3fbC1Jz/view.
 """
 
 from __future__ import annotations
@@ -30,37 +26,45 @@ logger = logging.getLogger(__name__)
 class OptimizationResult:
     """Result of trajectory optimization."""
 
-    trajectory: np.ndarray  # Optimized trajectory [N, 3] (x, y, heading)
+    # Optimized trajectory [N, 3] of (x, y, heading), or the input trajectory on failure.
+    trajectory: np.ndarray
+    # Whether the optimizer converged.
     success: bool
+    # Number of optimizer iterations; None on failure.
     iterations: int | None = None
+    # Cost of the optimized trajectory; None on failure.
     final_cost: float | None = None
+    # Optimizer or failure message.
     message: str = ""
 
 
 @dataclass
 class VehicleConstraints:
-    """Vehicle kinematic and comfort constraints."""
+    """Kinematic bounds and the PDMS comfort limits the optimizer enforces."""
 
-    max_deviation: float = 2.0  # Maximum deviation from original trajectory (meters)
-    max_heading_change: float = 0.5236  # ~30 degrees in radians
-    max_speed: float = 15.0  # m/s
-    max_accel: float = 5.0  # m/s²
+    # Maximum per-pose deviation from the original x and y in meters.
+    max_deviation: float = 2.0
+    # Maximum per-pose deviation from the original heading in radians (about 30 degrees).
+    max_heading_change: float = 0.5236
+    # Speed limit in m/s; not used by the optimizer.
+    max_speed: float = 15.0
+    # Acceleration limit in m/s^2; not used by the optimizer.
+    max_accel: float = 5.0
 
-    # Comfort limits (from PDMS spec)
-    max_abs_yaw_rate: float = 0.95  # rad/s
-    max_abs_yaw_acc: float = 1.93  # rad/s²
-    max_lon_acc_pos: float = 4.89  # m/s²
-    max_lon_acc_neg: float = -4.05  # m/s²
-    max_abs_lon_jerk: float = 8.37  # m/s³
+    # Maximum absolute yaw rate in rad/s.
+    max_abs_yaw_rate: float = 0.95
+    # Maximum absolute yaw acceleration in rad/s^2.
+    max_abs_yaw_acc: float = 1.93
+    # Maximum longitudinal acceleration in m/s^2.
+    max_lon_acc_pos: float = 4.89
+    # Minimum (most negative) longitudinal acceleration in m/s^2.
+    max_lon_acc_neg: float = -4.05
+    # Maximum absolute longitudinal jerk in m/s^3.
+    max_abs_lon_jerk: float = 8.37
 
 
 class TrajectoryOptimizer:
-    """
-    Trajectory optimizer for smoothness and comfort.
-
-    Refines VAM-predicted trajectories using classical optimization with
-    cost functions for trajectory smoothness and comfort constraint enforcement.
-    """
+    """Refines predicted trajectories for smoothness and comfort while staying close to them."""
 
     def __init__(
         self,
@@ -68,20 +72,19 @@ class TrajectoryOptimizer:
         deviation_weight: float = 0.1,
         comfort_weight: float = 2.0,
         max_iterations: int = 100,
-        # Frenet/retiming options
         enable_frenet_retiming: bool = True,
         retime_alpha: float = 0.25,
     ):
         """
-        Initialize the trajectory optimizer.
+        Initializes the trajectory optimizer.
 
         Args:
-            smoothness_weight: Weight for trajectory smoothness term (curvature penalty)
-            deviation_weight: Weight for deviation from original trajectory
-            comfort_weight: Weight for comfort constraint soft penalty
-            max_iterations: Maximum optimization iterations
-            enable_frenet_retiming: Whether to redistribute waypoints along path
-            retime_alpha: Retiming strength in [0,1]; higher = more front-loaded distance
+            smoothness_weight: weight of the second-difference smoothness cost.
+            deviation_weight: weight of the deviation from the original trajectory.
+            comfort_weight: weight of the soft comfort penalty.
+            max_iterations: maximum optimizer iterations.
+            enable_frenet_retiming: whether to start from waypoints redistributed along the path.
+            retime_alpha: retiming strength in [0, 1]; higher front-loads more distance.
         """
         self.smoothness_weight = smoothness_weight
         self.deviation_weight = deviation_weight
@@ -99,17 +102,17 @@ class TrajectoryOptimizer:
         retime_alpha: float | None = None,
     ) -> OptimizationResult:
         """
-        Optimize trajectory for smoothness and comfort.
+        Optimizes a trajectory for smoothness and comfort.
 
         Args:
-            trajectory: Original trajectory [N, 3] (x, y, heading) in rig/ego frame
-            time_step: Time between waypoints in seconds
-            vehicle_constraints: Vehicle kinematic and comfort limits
-            retime_in_frenet: Override for enabling Frenet retiming
-            retime_alpha: Override for retiming strength
+            trajectory: original trajectory [N, 3] of (x, y, heading) in the ego frame.
+            time_step: time between waypoints in seconds.
+            vehicle_constraints: kinematic and comfort limits; None uses the defaults.
+            retime_in_frenet: override of enable_frenet_retiming.
+            retime_alpha: override of the retiming strength.
 
         Returns:
-            OptimizationResult with optimized trajectory and metadata
+            the optimized trajectory with metadata, or the original one with success False.
         """
         if trajectory is None or len(trajectory) < 2:
             return OptimizationResult(
@@ -130,7 +133,6 @@ class TrajectoryOptimizer:
         original_trajectory = trajectory.copy()
         constraints = vehicle_constraints or VehicleConstraints()
 
-        # Determine retiming settings
         use_retiming = (
             self.enable_frenet_retiming
             if retime_in_frenet is None
@@ -142,7 +144,6 @@ class TrajectoryOptimizer:
             else float(np.clip(retime_alpha, 0.0, 1.0))
         )
 
-        # Apply Frenet-style retiming as initial guess
         if use_retiming:
             try:
                 initial_guess = self._retime_along_path(
@@ -154,24 +155,20 @@ class TrajectoryOptimizer:
         else:
             initial_guess = original_trajectory
 
-        # Create cost function
         cost_fn = self._create_cost_function(
             original_trajectory, time_step, constraints,
         )
 
-        # Create bounds
         bounds = self._create_bounds(original_trajectory, constraints)
 
-        # Create constraints (fixed endpoints + hard comfort limits)
         opt_constraints = self._create_constraints(
             original_trajectory, time_step, constraints, enforce_comfort=True,
         )
 
-        # Run optimization
         x0 = initial_guess.flatten()
 
         try:
-            # Try L-BFGS-B first (stable, no constraint support but respects bounds)
+            # L-BFGS-B respects only the bounds; SLSQP with the constraints is the fallback.
             result = minimize(
                 cost_fn,
                 x0,
@@ -181,7 +178,6 @@ class TrajectoryOptimizer:
             )
 
             if not result.success:
-                # Fallback to SLSQP with constraints
                 result = minimize(
                     cost_fn,
                     x0,
@@ -222,18 +218,26 @@ class TrajectoryOptimizer:
         time_step: float,
         constraints: VehicleConstraints,
     ):
-        """Create the cost function for optimization."""
+        """
+        Builds the weighted sum of smoothness, deviation and comfort costs.
+
+        Args:
+            original_trajectory: trajectory [N, 3] to stay close to.
+            time_step: time between waypoints in seconds.
+            constraints: comfort limits of the soft penalty.
+
+        Returns:
+            the cost of a flattened [N * 3] trajectory.
+        """
 
         def cost_function(x: np.ndarray) -> float:
+            """Returns the total cost of a flattened trajectory."""
             traj = x.reshape(-1, 3)
 
-            # Smoothness cost (second-order differences)
             smoothness_cost = self._compute_smoothness_cost(traj)
 
-            # Deviation from original
             deviation_cost = float(np.sum((traj - original_trajectory) ** 2))
 
-            # Comfort soft penalty
             comfort_penalty = self._compute_comfort_penalty(
                 traj, time_step, constraints,
             )
@@ -248,16 +252,22 @@ class TrajectoryOptimizer:
         return cost_function
 
     def _compute_smoothness_cost(self, trajectory: np.ndarray) -> float:
-        """Compute trajectory smoothness using second-order differences."""
+        """
+        Sums the squared second differences of position and wrapped heading.
+
+        Args:
+            trajectory: trajectory [N, 3] of (x, y, heading).
+
+        Returns:
+            the smoothness cost.
+        """
         if trajectory.shape[0] < 3:
             return 0.0
 
-        # Position second differences (curvature proxy)
         p = trajectory[:, :2]
         ddp = p[2:] - 2 * p[1:-1] + p[:-2]
         pos_smooth = float(np.sum(np.linalg.norm(ddp, axis=1) ** 2))
 
-        # Heading second difference with angle wrap
         yaw = trajectory[:, 2]
         dyaw1 = np.arctan2(np.sin(yaw[1:] - yaw[:-1]), np.cos(yaw[1:] - yaw[:-1]))
         if len(dyaw1) < 2:
@@ -275,19 +285,32 @@ class TrajectoryOptimizer:
         dt: float,
         constraints: VehicleConstraints,
     ) -> float:
-        """Compute soft penalty for exceeding comfort limits."""
+        """
+        Penalizes squared exceedances of the comfort limits.
+
+        Args:
+            trajectory: trajectory [N, 3] of (x, y, heading).
+            dt: time between waypoints in seconds.
+            constraints: comfort limits.
+
+        Returns:
+            the comfort penalty, 0 when every limit holds.
+        """
         if trajectory.shape[0] < 4:
             return 0.0
 
         yaw_rate, yaw_acc, lon_a, lon_j = self._compute_kinematics(trajectory, dt)
 
         def over_abs(arr: np.ndarray, limit: float) -> np.ndarray:
+            """Returns how far the absolute values exceed the limit."""
             return np.maximum(0.0, np.abs(arr) - limit)
 
         def over_upper(arr: np.ndarray, limit: float) -> np.ndarray:
+            """Returns how far the values exceed the upper limit."""
             return np.maximum(0.0, arr - limit)
 
         def over_lower(arr: np.ndarray, limit: float) -> np.ndarray:
+            """Returns how far the values fall below the lower limit."""
             return np.maximum(0.0, limit - arr)
 
         p_yaw_rate = over_abs(yaw_rate, constraints.max_abs_yaw_rate)
@@ -309,7 +332,16 @@ class TrajectoryOptimizer:
     def _compute_kinematics(
         self, trajectory: np.ndarray, dt: float,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Compute kinematic quantities from trajectory."""
+        """
+        Differentiates a trajectory into yaw and longitudinal kinematics.
+
+        Args:
+            trajectory: trajectory [N, 3] of (x, y, heading).
+            dt: time between waypoints in seconds, floored at 1 ms.
+
+        Returns:
+            the yaw rate, yaw acceleration, longitudinal acceleration and longitudinal jerk, each [N].
+        """
         dt = max(float(dt), 1e-3)
         x = trajectory[:, 0]
         y = trajectory[:, 1]
@@ -318,7 +350,6 @@ class TrajectoryOptimizer:
         vx = np.gradient(x, dt)
         vy = np.gradient(y, dt)
 
-        # Longitudinal velocity along heading
         lon_v = vx * np.cos(yaw) + vy * np.sin(yaw)
         lon_a = np.gradient(lon_v, dt)
         lon_j = np.gradient(lon_a, dt)
@@ -333,7 +364,16 @@ class TrajectoryOptimizer:
         original_trajectory: np.ndarray,
         constraints: VehicleConstraints,
     ) -> List[Tuple[float, float]]:
-        """Create optimization bounds."""
+        """
+        Bounds every pose to a box around the original pose.
+
+        Args:
+            original_trajectory: trajectory [N, 3] to stay close to.
+            constraints: the allowed position and heading deviation.
+
+        Returns:
+            the (low, high) bounds of the flattened [N * 3] variables.
+        """
         bounds = []
         for i in range(len(original_trajectory)):
             bounds.extend(
@@ -361,37 +401,41 @@ class TrajectoryOptimizer:
         constraints: VehicleConstraints,
         enforce_comfort: bool = True,
     ) -> List[Dict[str, Any]]:
-        """Create optimization constraints (fixed endpoints and optional comfort limits)."""
+        """
+        Builds the SLSQP constraints: fixed start and end poses and, optionally, hard comfort limits.
+
+        Args:
+            original_trajectory: trajectory [N, 3] whose endpoints stay fixed.
+            time_step: time between waypoints in seconds.
+            constraints: comfort limits.
+            enforce_comfort: whether to add the comfort limits as inequality constraints.
+
+        Returns:
+            the scipy constraint dicts.
+        """
         opt_constraints = []
 
-        # Keep start point fixed
         opt_constraints.append(
             {"type": "eq", "fun": lambda x: x[:3] - original_trajectory[0]},
         )
 
-        # Keep end point fixed
         opt_constraints.append(
             {"type": "eq", "fun": lambda x: x[-3:] - original_trajectory[-1]},
         )
 
-        # Hard comfort constraints: ensure 'c' metric stays 1.0
         if enforce_comfort:
 
             def comfort_margins(z: np.ndarray) -> np.ndarray:
+                """Returns the margin to each comfort limit, non-negative when it holds."""
                 traj = z.reshape(-1, 3)
                 yaw_rate, yaw_acc, lon_a, lon_j = self._compute_kinematics(
                     traj, time_step,
                 )
                 margins = [
-                    # yaw rate: |.| <= max_abs_yaw_rate
                     constraints.max_abs_yaw_rate - np.max(np.abs(yaw_rate)),
-                    # yaw accel: |.| <= max_abs_yaw_acc
                     constraints.max_abs_yaw_acc - np.max(np.abs(yaw_acc)),
-                    # lon accel upper: <= max_lon_acc_pos
                     constraints.max_lon_acc_pos - np.max(lon_a),
-                    # lon accel lower: >= max_lon_acc_neg
                     np.min(lon_a) - constraints.max_lon_acc_neg,
-                    # lon jerk: |.| <= max_abs_lon_jerk
                     constraints.max_abs_lon_jerk - np.max(np.abs(lon_j)),
                 ]
                 return np.array(margins, dtype=np.float64)
@@ -400,12 +444,16 @@ class TrajectoryOptimizer:
 
         return opt_constraints
 
-    # -------------------------
-    # Frenet-style retiming
-    # -------------------------
-
     def _polyline_arclen(self, pts: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute cumulative arc-length along a 2D polyline."""
+        """
+        Computes the cumulative arc length along a 2D polyline.
+
+        Args:
+            pts: polyline points [N, 2].
+
+        Returns:
+            the arc length at every point [N] and the segment lengths [N - 1].
+        """
         if pts.shape[0] < 2:
             return np.zeros((pts.shape[0],), dtype=np.float64), np.zeros(
                 (0,), dtype=np.float64,
@@ -419,7 +467,17 @@ class TrajectoryOptimizer:
     def _sample_polyline_by_s(
         self, pts: np.ndarray, s: np.ndarray, s_query: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Sample a 2D polyline at query arc-lengths."""
+        """
+        Samples positions and segment headings of a 2D polyline at query arc lengths.
+
+        Args:
+            pts: polyline points [N, 2].
+            s: arc length at every point [N].
+            s_query: arc lengths to sample [M], clipped to the polyline.
+
+        Returns:
+            the sampled positions [M, 2] and headings [M].
+        """
         N = pts.shape[0]
         if N == 0:
             return np.zeros((0, 2)), np.zeros((0,))
@@ -468,14 +526,14 @@ class TrajectoryOptimizer:
         self, trajectory: np.ndarray, alpha: float = 0.25,
     ) -> np.ndarray:
         """
-        Redistribute waypoints along path (Frenet-style) keeping endpoints fixed.
+        Redistributes the waypoints along the path with an ease-out warp, keeping the endpoints fixed.
 
         Args:
-            trajectory: [N, 3] array of (x, y, yaw)
-            alpha: Retiming strength in [0, 1]; higher = more front-loaded distance
+            trajectory: trajectory [N, 3] of (x, y, yaw).
+            alpha: retiming strength in [0, 1]; higher front-loads more distance.
 
         Returns:
-            Retimed trajectory [N, 3] with same endpoints, adjusted spacing.
+            the retimed trajectory [N, 3].
         """
         if trajectory is None or trajectory.shape[0] < 2:
             return trajectory
@@ -490,7 +548,6 @@ class TrajectoryOptimizer:
         N = trajectory.shape[0]
         t = np.linspace(0.0, 1.0, N, dtype=np.float64)
 
-        # Ease-out warp: w(t) = 1 - (1-t)^(1 + 4*alpha)
         beta = 1.0 + 4.0 * float(np.clip(alpha, 0.0, 1.0))
         w = 1.0 - np.power(1.0 - t, beta)
         s_new = total * w
@@ -501,7 +558,6 @@ class TrajectoryOptimizer:
         out[:, 0:2] = xy_new
         out[:, 2] = yaw_new
 
-        # Ensure exact start/end equality
         out[0] = trajectory[0]
         out[-1] = trajectory[-1]
 
@@ -510,15 +566,13 @@ class TrajectoryOptimizer:
 
 def add_heading_to_trajectory(xy_trajectory: np.ndarray) -> WrappedSE2Array:
     """
-    Add heading column to an [N, 2] trajectory.
-
-    Computes heading from consecutive position deltas.
+    Adds a heading column from consecutive position deltas, the first measured from the ego origin.
 
     Args:
-        xy_trajectory: [N, 2] array of (x, y) positions
+        xy_trajectory: positions [N, 2].
 
     Returns:
-        [N, 3] array of (x, y, heading)
+        the trajectory [N, 3] of (x, y, heading), heading wrapped to [-pi, pi).
     """
     if xy_trajectory is None or len(xy_trajectory) == 0:
         return np.zeros((0, 3), dtype=np.float64)
@@ -530,7 +584,7 @@ def add_heading_to_trajectory(xy_trajectory: np.ndarray) -> WrappedSE2Array:
     N = xy.shape[0]
     headings = np.zeros(N, dtype=np.float64)
 
-    prev_pos = np.array([0.0, 0.0])  # Start at ego origin
+    prev_pos = np.array([0.0, 0.0])
     for i in range(N):
         delta = xy[i] - prev_pos
         dist = np.hypot(delta[0], delta[1])

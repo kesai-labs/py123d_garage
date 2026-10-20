@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 # python
 *.pyc
 **/__pycache__/
@@ -15,11 +18,13 @@
 *.mp4
 *.png
 !docs/assets/*.png
+!src/py123d_garage/common/sensor/assets/ego_hoods/*.png
 
 # files
 *.log
 *.pkl
 *.jpg
+!docs/assets/*.jpg
 *.pcd
 
 # exp
@@ -48,8 +53,7 @@ lib/carla/simulator/
 # AlpaSim
 lib/alpasim/alpasim
 
-# symlinks into the private repo
+# runs and data links
 outputs
 /data
 /data_mini
-outputs

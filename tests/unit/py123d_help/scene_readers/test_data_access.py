@@ -1,25 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Temporal sampling: past offset grids, ego SE2 interpolation and ego trajectory sampling."""
 
 from __future__ import annotations
 
 import math
 from collections.abc import Iterator
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import MagicMock
 
 import numpy as np
 import numpy.typing as npt
 import pytest
 from py123d.api import SceneAPI
+from py123d.api.scene.arrow.arrow_log_writer import ArrowLogWriter
+from py123d.api.scene.arrow.arrow_scene_api import ArrowSceneAPI
+from py123d.api.scene.arrow.utils.log_writer_config import LogWriterConfig
 from py123d.datatypes import LidarID, Timestamp
+from py123d.datatypes.metadata.log_metadata import LogMetadata
 from py123d.datatypes.vehicle_state.ego_state import EgoStateSE3
 from py123d.datatypes.vehicle_state.ego_state_metadata import (
     EgoStateSE3Metadata,
 )
 from py123d.geometry import PoseSE2
 from py123d.geometry.pose import PoseSE3
+from py123d.parser.base_dataset_parser import ModalitiesSync
 
+from py123d_garage.api.abstract_policy_config import uniform_offsets_us
 from py123d_garage.py123d_help.scene_readers import (
     accumulate_lidar_in_anchor_frame,
     interpolate_ego_se2_at,
@@ -155,44 +164,40 @@ _EPOCH_US = 1_700_000_000_000_000
 
 
 def _scene_api_with_log(
+    tmp_path: Path,
     pose_se2_array: npt.NDArray[np.float64],
     timestamps_us: npt.NDArray[np.int64],
+    metadata: EgoStateSE3Metadata = _EGO_METADATA,
 ) -> SceneAPI:
-    """
-    Builds a SceneAPI double serving the given logged rear-axle poses.
-
-    Args:
-        pose_se2_array: logged (x, y, yaw) rear-axle poses.
-        timestamps_us: absolute timestamps in microseconds, one per pose.
-
-    Returns:
-        a mock passing the SceneAPI isinstance check.
-    """
-    states: list[EgoStateSE3] = []
-    for pose, timestamp in zip(pose_se2_array, timestamps_us, strict=True):
-        state = MagicMock(spec=EgoStateSE3)
-        state.rear_axle_se2 = PoseSE2(
-            float(pose[0]),
-            float(pose[1]),
-            float(pose[2]),
+    """Writes a log whose IMU drives through the given (x, y, yaw) poses and opens it."""
+    log_metadata = LogMetadata(
+        dataset="test-dataset",
+        split="test-dataset_train",
+        log_name="log_001",
+        location=None,
+        map_metadata=None,
+    )
+    writer = ArrowLogWriter(LogWriterConfig(), logs_root=tmp_path, sensors_root=tmp_path)
+    writer.reset(log_metadata)
+    for pose, timestamp_us in zip(pose_se2_array, timestamps_us, strict=True):
+        imu_se3 = PoseSE3.from_list(
+            [float(pose[0]), float(pose[1]), 0.0, math.cos(pose[2] / 2.0), 0.0, 0.0, math.sin(pose[2] / 2.0)],
         )
-        state.timestamp.time_us = int(timestamp)
-        states.append(state)
-    scene_api = MagicMock(spec=SceneAPI)
-    scene_api.get_ego_state_se3_at_iteration.return_value = states[0]
-    scene_api.get_modality_between_timestamps.return_value = states
-    return scene_api
+        state = EgoStateSE3.from_imu(imu_se3=imu_se3, metadata=metadata, timestamp=Timestamp.from_us(int(timestamp_us)))
+        writer.write_sync(ModalitiesSync(timestamp=Timestamp.from_us(int(timestamp_us)), modalities=[state]))
+    writer.close()
+    return ArrowSceneAPI(tmp_path / log_metadata.split / log_metadata.log_name)
 
 
-def test_sample_ego_trajectory_absolute_straight_line() -> None:
+def test_sample_ego_trajectory_absolute_straight_line(tmp_path: Path) -> None:
     """Resampling a 10 m/s straight log at 0.5 s steps lands at 5 m increments."""
     log_times_s = np.arange(0.0, 2.71, 0.3)
     poses = np.zeros((len(log_times_s), 3), dtype=np.float64)
     poses[:, 0] = 10.0 * log_times_s
     timestamps = _EPOCH_US + (log_times_s * 1e6).astype(np.int64)
-    scene_api = _scene_api_with_log(poses, timestamps)
+    scene_api = _scene_api_with_log(tmp_path, poses, timestamps)
 
-    result = sample_ego_se2(scene_api, num_steps=4, interval_us=500_000)
+    result = sample_ego_se2(scene_api, offsets_us=uniform_offsets_us(500_000, 2_000_000))
 
     expected_times = _EPOCH_US + np.array(
         [500_000, 1_000_000, 1_500_000, 2_000_000],
@@ -207,7 +212,7 @@ def test_sample_ego_trajectory_absolute_straight_line() -> None:
     assert np.allclose(result.pose_se2_array, expected, atol=1e-6)
 
 
-def test_sample_ego_trajectory_relative_frame() -> None:
+def test_sample_ego_trajectory_relative_frame(tmp_path: Path) -> None:
     """A log driving +y from a rotated origin becomes straight-ahead in the ego frame."""
     log_times_s = np.arange(0.0, 2.71, 0.3)
     poses = np.zeros((len(log_times_s), 3), dtype=np.float64)
@@ -215,28 +220,55 @@ def test_sample_ego_trajectory_relative_frame() -> None:
     poses[:, 1] = -5.0 + 4.0 * log_times_s
     poses[:, 2] = math.pi / 2.0
     timestamps = _EPOCH_US + (log_times_s * 1e6).astype(np.int64)
-    scene_api = _scene_api_with_log(poses, timestamps)
+    scene_api = _scene_api_with_log(tmp_path, poses, timestamps)
 
-    result = sample_ego_se2(scene_api, num_steps=4, interval_us=500_000, relative_to_anchor=True)
+    result = sample_ego_se2(scene_api, offsets_us=uniform_offsets_us(500_000, 2_000_000), relative_to_anchor=True)
 
     expected = np.zeros((4, 3), dtype=np.float64)
     expected[:, 0] = 4.0 * np.array([0.5, 1.0, 1.5, 2.0])
     assert np.allclose(result.pose_se2_array, expected, atol=1e-6)
 
 
-def test_sample_ego_xy_matches_the_se2_positions() -> None:
+def test_sample_ego_xy_matches_the_se2_positions(tmp_path: Path) -> None:
     """The xy resampler is the se2 one without the yaw column."""
     log_times_s = np.arange(0.0, 2.71, 0.3)
     poses = np.zeros((len(log_times_s), 3), dtype=np.float64)
     poses[:, 0] = 10.0 * log_times_s
     timestamps = _EPOCH_US + (log_times_s * 1e6).astype(np.int64)
-    scene_api = _scene_api_with_log(poses, timestamps)
+    scene_api = _scene_api_with_log(tmp_path, poses, timestamps)
 
-    se2 = sample_ego_se2(scene_api, num_steps=4, interval_us=500_000)
-    xy = sample_ego_xy(scene_api, num_steps=4, interval_us=500_000)
+    se2 = sample_ego_se2(scene_api, offsets_us=uniform_offsets_us(500_000, 2_000_000))
+    xy = sample_ego_xy(scene_api, offsets_us=uniform_offsets_us(500_000, 2_000_000))
 
     assert np.allclose(xy.position_xy_array, se2.pose_se2_array[:, :2], atol=1e-12)
     assert np.array_equal(xy.timestamps_us, se2.timestamps_us)
+
+
+def test_sample_ego_trajectory_reads_the_rear_axle_of_a_tilted_imu(tmp_path: Path) -> None:
+    """The column read matches each logged state's own rear-axle pose when the IMU sits off the rear axle."""
+    metadata = EgoStateSE3Metadata(
+        vehicle_name="test_vehicle",
+        width=2.0,
+        length=4.5,
+        height=1.6,
+        wheel_base=2.8,
+        center_to_imu_se3=PoseSE3.identity(),
+        rear_axle_to_imu_se3=PoseSE3.from_list([1.3, -0.2, 0.7, 0.9990, 0.0300, -0.0200, 0.0250]),
+    )
+    log_times_s = np.arange(0.0, 2.71, 0.1)
+    poses = np.stack([8.0 * log_times_s, np.sin(log_times_s), 0.4 * log_times_s], axis=1, dtype=np.float64)
+    timestamps = _EPOCH_US + (log_times_s * 1e6).astype(np.int64)
+    scene_api = _scene_api_with_log(tmp_path, poses, timestamps, metadata)
+
+    result = sample_ego_se2(scene_api, offsets_us=uniform_offsets_us(100_000, 2_000_000))
+
+    expected = []
+    for offset_us in uniform_offsets_us(100_000, 2_000_000):
+        state = scene_api.get_modality_at_timestamp(_EPOCH_US + offset_us, "ego_state_se3")
+        assert isinstance(state, EgoStateSE3)
+        expected.append(state.rear_axle_se2.array)
+    # Normalizing a quaternion by its inverse norm (one state) or by its norm (all states) can differ in the last bit.
+    assert np.allclose(result.pose_se2_array, np.array(expected), rtol=0.0, atol=1e-12)
 
 
 def _ego_state_at_pose(timestamp_us: int, pose: PoseSE2) -> EgoStateSE3:

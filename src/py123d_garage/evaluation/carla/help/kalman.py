@@ -1,7 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 import math
 
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 from py123d.geometry.utils.rotation_utils import normalize_angle
@@ -23,17 +27,14 @@ _THROTTLE_ACCELERATION_MPS2 = 0.5633837
 
 
 def _bicycle_model_forward(
-    state: npt.NDArray[np.float64],
+    state: jt.Float64[npt.NDArray[np.float64], " 4"],
     dt: float,
     steer: float,
     throttle: float,
     brake: float,
-) -> npt.NDArray[np.float64]:
+) -> jt.Float64[npt.NDArray[np.float64], " 4"]:
     """
-    Propagates one state through leaderboard 1.0's kinematic bicycle model.
-
-    The wheelbase, gain and acceleration constants are World on Rails' fit of
-    CARLA's default ego vehicle.
+    Propagates one state through World on Rails' kinematic bicycle fit of CARLA's default ego vehicle.
 
     Args:
         state: (x, y, yaw, speed) in the CARLA world frame.
@@ -61,9 +62,9 @@ def _bicycle_model_forward(
 
 
 def _residual(
-    left: npt.NDArray[np.float64],
-    right: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
+    left: jt.Float64[npt.NDArray[np.float64], "... 4"],
+    right: jt.Float64[npt.NDArray[np.float64], "... 4"],
+) -> jt.Float64[npt.NDArray[np.float64], "... 4"]:
     """
     Subtracts two states, taking the shorter way around on the yaw component.
 
@@ -80,9 +81,9 @@ def _residual(
 
 
 def _weighted_mean(
-    sigmas: npt.NDArray[np.float64],
-    weights: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
+    sigmas: jt.Float64[npt.NDArray[np.float64], "num_sigmas 4"],
+    weights: jt.Float64[npt.NDArray[np.float64], " num_sigmas"],
+) -> jt.Float64[npt.NDArray[np.float64], " 4"]:
     """
     Averages sigma points, averaging their yaws as unit vectors.
 
@@ -99,15 +100,7 @@ def _weighted_mean(
 
 
 class GnssKalmanFilter:
-    """
-    Fuses the noisy GNSS fix with the vehicle model driven by the applied controls.
-
-    The leaderboard's GNSS carries about half a metre of white noise per axis, twice
-    the width of a BEV pixel, which jitters the route progress and smears the lidar
-    sweeps a policy accumulates across ticks. The state is (x, y, yaw, speed) in the
-    CARLA world frame and the measurement is that whole state, so only the vehicle
-    model needs the unscented treatment; the correction is the linear one.
-    """
+    """Unscented Kalman filter fusing the noisy GNSS fix with a bicycle model driven by the applied controls."""
 
     def __init__(self, dt: float) -> None:
         """
@@ -130,13 +123,13 @@ class GnssKalmanFilter:
 
     def step(
         self,
-        position: npt.NDArray[np.float64],
+        position: jt.Float64[npt.NDArray[np.float64], " 2"],
         yaw: float,
         speed: float,
         steer: float,
         throttle: float,
         brake: float,
-    ) -> npt.NDArray[np.float64]:
+    ) -> jt.Float64[npt.NDArray[np.float64], " 2"]:
         """
         Predicts through the controls that were applied, then corrects with this tick's fix.
 
@@ -170,7 +163,7 @@ class GnssKalmanFilter:
         )
         return self._state[:2] + self._origin
 
-    def _predict(self, steer: float, throttle: float, brake: float) -> npt.NDArray[np.float64]:
+    def _predict(self, steer: float, throttle: float, brake: float) -> jt.Float64[npt.NDArray[np.float64], "4 4"]:
         """
         Propagates the state through the vehicle model.
 
@@ -196,8 +189,8 @@ class GnssKalmanFilter:
 
     def _update(
         self,
-        measurement: npt.NDArray[np.float64],
-        model_covariance: npt.NDArray[np.float64],
+        measurement: jt.Float64[npt.NDArray[np.float64], " 4"],
+        model_covariance: jt.Float64[npt.NDArray[np.float64], "4 4"],
     ) -> None:
         """
         Corrects the predicted state towards the measurement.

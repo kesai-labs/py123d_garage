@@ -16,25 +16,24 @@ from py123d.geometry.utils.rotation_utils import normalize_angle
 
 from py123d_garage.evaluation.navsim.help.utils.graph_search.bfs_roadblock import BreadthFirstSearchLaneGroup
 
+# Search radii in meters, tried in order, for lane groups near a point outside every lane group.
 _CANDIDATE_FALLBACK_RADII: list[float] = [5.0, 20.0, 50.0]
+# Whether nuPlan scenes use their logged route instead of an inferred one.
 _USE_NUPLAN_DEFAULT_ROUTE: bool = True
+# How far ahead in the log, in seconds, the inferred route leads to.
 _TARGET_ROUTE_LOOKAHEAD_TIME_S: float = 60.0
 
 
 def get_route_lane_group_ids(scene_api: SceneAPI) -> list[int]:
     """
-    Returns the on-route lane group ids for the scene.
-
-    Uses nuPlan's logged route roadblocks when available, otherwise infers the route via
-    :func:`_infer_route_lane_group_ids`.
+    Gets the route of a scene, the logged nuPlan route if available, else one inferred from the log.
 
     Args:
-        scene_api: scene interface providing map and ego state access
+        scene_api: Scene to get the route of.
 
     Returns:
-        ordered on-route lane group ids (empty if none can be determined)
+        The ordered on-route lane group IDs, empty if none can be determined.
     """
-
     route_lane_group_ids: list[int] = []
     if scene_api.get_map_metadata() is not None:
         dataset_name = scene_api.get_log_metadata().dataset
@@ -57,18 +56,14 @@ def get_route_lane_group_ids(scene_api: SceneAPI) -> list[int]:
 
 def _infer_route_lane_group_ids(scene_api: SceneAPI) -> list[int]:
     """
-    Infers the route lane group ids via shortest-path search on the lane-group graph.
-
-    Looks up the ego position ``_TARGET_ROUTE_LOOKAHEAD_TIME_S`` ahead (via an oracle), then finds
-    the shortest lane-group path from the current position's candidates to the look-ahead candidates.
+    Infers the route as the shortest lane group path from ego to its logged pose _TARGET_ROUTE_LOOKAHEAD_TIME_S ahead.
 
     Args:
-        scene_api: Arrow-backed scene interface
+        scene_api: Scene to infer the route of.
 
     Returns:
-        lane group ids along the inferred route (empty if no path is found)
+        The lane group IDs along the route, empty if no path is found.
     """
-
     initial_ego_state_se3 = scene_api.get_ego_state_se3_at_iteration(0)
     assert initial_ego_state_se3 is not None, "Ego state modality not found at iteration 0."
 
@@ -85,7 +80,6 @@ def _infer_route_lane_group_ids(scene_api: SceneAPI) -> list[int]:
     )
     assert map_api is not None, "Map API not found in Agent API."
 
-    # Query nearest lane groups to initial and end ego states, several candidates for start and end lane groups.
     start_candidates = _query_lane_group_candidates(
         map_api,
         initial_ego_state_se3.center_2d,
@@ -97,7 +91,6 @@ def _infer_route_lane_group_ids(scene_api: SceneAPI) -> list[int]:
     if not start_candidates or not end_candidates:
         return []
 
-    # Use lane group digraph to find optional lane group sequence from start to end candidates.
     # py123d annotates the return as a bare nx.DiGraph; the nodes are the layer's object ids.
     lane_group_digraph = cast(
         "nx.DiGraph[int]",
@@ -132,10 +125,14 @@ def _query_lane_group_candidates(
     point_2d: Point2D,
 ) -> list[int]:
     """
-    Return candidate lane-group IDs at ``point_2d``.
+    Finds the lane groups containing a point, else the lane groups within the smallest fallback radius.
 
-    Containment first (cheapest correct query when ego is on a lane group), then a
-    radius fallback for ego poses slightly off any polygon (e.g. parked at a curb).
+    Args:
+        map_api: Map to query.
+        point_2d: Point to query at.
+
+    Returns:
+        The candidate lane group IDs, empty if none is near.
     """
     contained = map_api.query_object_ids(
         geometry=point_2d.shapely_point,
@@ -167,20 +164,17 @@ def get_current_lane_group_candidates(
     displacement_error_thresh: float = 3,
 ) -> tuple[LaneGroup, list[LaneGroup]]:
     """
-    Finds the ego's current lane group and the set of nearby candidate lane groups.
-
-    Prefers on-route candidates, falling back to the closest off-route candidate, and finally
-    to any close lane group.
+    Finds ego's current lane group, preferring aligned on-route lane groups, then aligned ones, then the closest.
 
     Args:
-        ego_pose_se2: pose of the ego vehicle
-        map_api: map interface
-        route_lane_group_dict: on-route lane group dictionary
-        heading_error_thresh: [rad] max heading error for a lane to count as a candidate
-        displacement_error_thresh: [m] max displacement error for a lane to count as a candidate
+        ego_pose_se2: Ego pose.
+        map_api: Map of the scene.
+        route_lane_group_dict: On-route lane groups, keyed by ID.
+        heading_error_thresh: [rad] Maximum heading error for a lane to count as a candidate.
+        displacement_error_thresh: [m] Maximum displacement error for a lane to count as a candidate.
 
     Returns:
-        tuple of (best current lane group, list of candidate lane groups)
+        The current lane group and the candidate lane groups.
     """
     lane_group_dict = map_api.get_map_objects_in_radius(
         point=ego_pose_se2.point_2d,
@@ -262,16 +256,13 @@ def get_current_lane_group_candidates(
 
 def _lane_group_entry_exit_yaw(lane_group: LaneGroup) -> tuple[float, float]:
     """
-    Returns a representative ``(entry_yaw, exit_yaw)`` [rad] for a lane group.
-
-    Uses the lane group's first lane centerline, whose start/end heading approximate the heading of
-    the (near-parallel) lanes in the group at the group's entry and exit.
+    Approximates a lane group's entry and exit heading by its first lane's centerline.
 
     Args:
-        lane_group: lane group with at least one lane
+        lane_group: Lane group with at least one lane.
 
     Returns:
-        tuple of (entry yaw, exit yaw) in radians
+        The entry and exit yaw in radians.
     """
     poses_se2 = lane_group.lanes[0].centerline.polyline_se2.array
     return float(poses_se2[0, PoseSE2Index.YAW]), float(
@@ -284,18 +275,14 @@ def _roll_out_forward_lane_groups(
     search_depth_forward: int = 30,
 ) -> tuple[list[LaneGroup], list[int]]:
     """
-    Greedily rolls out a 'follow-the-road' route by following the straightest successor.
-
-    At each step the successor minimizing the heading change between the current lane group's exit
-    tangent and the candidate's entry tangent is chosen. Stops at ``search_depth_forward`` steps,
-    when there is no successor, or when a lane group repeats (loop guard).
+    Builds a follow-the-road route by greedily taking the successor with the smallest heading change.
 
     Args:
-        start_lane_group: lane group to start the rollout from
-        search_depth_forward: max number of successor lane groups to append, defaults to 30
+        start_lane_group: Lane group to start from.
+        search_depth_forward: Maximum number of successor lane groups to append.
 
     Returns:
-        tuple of (route lane groups, route lane group ids), starting with ``start_lane_group``
+        The route lane groups and their IDs, starting with start_lane_group.
     """
     route_lane_groups: list[LaneGroup] = [start_lane_group]
     route_lane_group_ids: list[int] = [int(start_lane_group.object_id)]
@@ -334,23 +321,17 @@ def infer_follow_the_road_route(
     search_depth_forward: int = 30,
 ) -> list[int]:
     """
-    Synthesizes a 'follow-the-road' route from the ego's current lane group.
-
-    Fallback used when no on-route lane groups are available (e.g. there is no logged route and the
-    oracle-based inference found no path). Finds the ego's current lane group purely from the map
-    (no oracle / ground-truth) and greedily follows the straightest successor along the lane-group
-    graph via :func:`_roll_out_forward_lane_groups`.
+    Builds a follow-the-road route from ego's current lane group, using the map only.
 
     Args:
-        ego_pose_se2: pose of the ego vehicle
-        map_api: map interface
-        search_depth_forward: max number of successor lane groups to roll out, defaults to 30
+        ego_pose_se2: Ego pose.
+        map_api: Map of the scene.
+        search_depth_forward: Maximum number of successor lane groups to append.
 
     Returns:
-        ordered lane group ids starting at ego (empty if ego is not on/near any lane group)
+        The ordered lane group IDs starting at ego, empty if no lane group is near ego.
     """
-    # Guard get_current_lane_group_candidates, which calls np.argmin over the candidate list and
-    # would raise on an empty list when no lane group exists near ego (e.g. ego off-map).
+    # get_current_lane_group_candidates raises when no lane group is near ego.
     nearby = map_api.get_map_objects_in_radius(
         point=ego_pose_se2.point_2d,
         radius=100.0,
@@ -379,20 +360,17 @@ def route_lane_group_correction(
     search_depth_forward: int = 30,
 ) -> tuple[list[LaneGroup], list[int]]:
     """
-    Corrects and repairs the on-route lane groups for the current ego pose.
-
-    Handles three cases: an off-route start (backward then forward graph search), disconnected
-    consecutive lane groups (search for connecting links), and route loops.
+    Repairs the route for the current ego pose: an off-route start, unlinked lane groups and loops.
 
     Args:
-        ego_pose_se2: pose of the ego vehicle
-        map_api: map interface
-        route_lane_group_dict: on-route lane group dictionary
-        search_depth_backward: max BFS depth for the backward search, defaults to 15
-        search_depth_forward: max BFS depth for the forward search, defaults to 30
+        ego_pose_se2: Ego pose.
+        map_api: Map of the scene.
+        route_lane_group_dict: On-route lane groups, keyed by ID.
+        search_depth_backward: Maximum BFS depth of the backward search.
+        search_depth_forward: Maximum BFS depth of the forward search.
 
     Returns:
-        tuple of (corrected lane groups, corrected lane group ids)
+        The corrected lane groups and their IDs.
     """
     # TODO: Refactor code for readability
 
@@ -406,8 +384,7 @@ def route_lane_group_correction(
     route_lane_groups = list(route_lane_group_dict.values())
     route_lane_group_ids = list(route_lane_group_dict.keys())
 
-    # When no route is provided, synthesize a follow-the-road route from the current lane group.
-    # Avoids indexing the empty route below and keeps the agent driving down the road.
+    # The code below indexes the route, so an empty route falls back to following the road.
     if not route_lane_group_ids:
         return _roll_out_forward_lane_groups(
             starting_group,
@@ -416,7 +393,6 @@ def route_lane_group_correction(
 
     # Fix 1: when agent starts off-route
     if starting_group.object_id not in route_lane_group_ids:
-        # Backward search if current lane_group not in route
         graph_search = BreadthFirstSearchLaneGroup(
             route_lane_group_ids[0],
             map_api,
@@ -501,13 +477,12 @@ def remove_route_loops(
     Removes the end of the route where a lane group intersects an earlier one (forming a loop).
 
     Args:
-        route_lane_groups: input route lane_groups
-        route_lane_group_ids: input route lane_groups ids
+        route_lane_groups: Route lane groups.
+        route_lane_group_ids: IDs of the route lane groups.
 
     Returns:
-        tuple of ids and lane_groups of route without loops
+        The route lane groups and their IDs, cut before the loop.
     """
-
     lane_group_intersection_dict: dict[int, geom.base.BaseGeometry] = {}
 
     loop_idx: int | None = None

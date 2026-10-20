@@ -25,14 +25,14 @@ def build_route_dicts(
     route_roadblock_ids: list[int],
 ) -> tuple[dict[int, LaneGroup], dict[int, Lane]]:
     """
-    Builds roadblock and lane dictionaries of the target route from the map-api.
+    Looks up the lane groups of the route and their lanes in the map.
 
     Args:
-        map_api: map interface
-        route_roadblock_ids: ID's of on-route roadblocks
+        map_api: Map to look the IDs up in.
+        route_roadblock_ids: IDs of the on-route lane groups.
 
     Returns:
-        tuple of (route_roadblock_dict, route_lane_dict)
+        The route lane groups and the route lanes, keyed by ID.
     """
     route_roadblock_ids = list(dict.fromkeys(route_roadblock_ids))
 
@@ -57,15 +57,15 @@ def correct_route_lane_groups(
     route_lane_group_dict: dict[int, LaneGroup],
 ) -> tuple[dict[int, LaneGroup], dict[int, Lane]]:
     """
-    Corrects the roadblock route and rebuilds lane-graph dictionaries.
+    Corrects the route to start at ego's lane group and rebuilds the route dictionaries.
 
     Args:
-        ego_state_se2: state of the ego vehicle
-        map_api: map interface
-        route_lane_group_dict: current lane group dict (used for correction context)
+        ego_state_se2: Current ego state.
+        map_api: Map of the scene.
+        route_lane_group_dict: Route lane groups to correct.
 
     Returns:
-        tuple of (corrected route_roadblock_dict, corrected route_lane_dict)
+        The corrected route lane groups and route lanes, keyed by ID.
     """
     _, corrected_ids = route_lane_group_correction(
         ego_pose_se2=ego_state_se2.rear_axle_se2,
@@ -85,20 +85,19 @@ def build_drivable_area_occupancy_map(
     Builds an occupancy map of drivable surfaces around ego from the given map layers.
 
     Args:
-        map_api: map interface
-        ego_state_se2: state of the ego vehicle
-        map_radius: radius around ego to query [m], defaults to 50.0
-        layers: map layers treated as drivable
+        map_api: Map of the scene.
+        ego_state_se2: Current ego state.
+        map_radius: [m] Radius around ego to query.
+        layers: Map layers treated as drivable, lanes, lane groups, intersections and car parks if None.
 
     Returns:
-        occupancy map of drivable surface polygons
+        The occupancy map of drivable polygons, keyed by "<layer>-<object id>".
     """
     if layers is None:
         layers = [
             MapLayer.LANE,
             MapLayer.LANE_GROUP,
             MapLayer.INTERSECTION,
-            MapLayer.GENERIC_DRIVABLE,
             MapLayer.CARPARK,
         ]
     query_dict = map_api.get_map_objects_in_radius(
@@ -121,15 +120,15 @@ def _get_intersecting_lanes(
     drivable_area_map: OccupancyMap2D,
 ) -> tuple[list[Lane], list[float]]:
     """
-    Returns on-route lanes and heading errors where ego-vehicle intersects.
+    Finds the on-route lanes containing ego's rear axle and ego's heading error to them.
 
     Args:
-        ego_state_se2: state of ego-vehicle
-        route_lane_dict: on-route lane dictionary
-        drivable_area_map: drivable area occupancy map
+        ego_state_se2: Current ego state.
+        route_lane_dict: On-route lanes, keyed by ID.
+        drivable_area_map: Drivable area occupancy map.
 
     Returns:
-        tuple of lists with lane objects and heading errors [rad].
+        The lanes and the absolute heading errors in radians.
     """
     ego_se2_array: npt.NDArray[np.float64] = ego_state_se2.rear_axle_se2.array
     ego_rear_axle_point: Point = Point(*ego_se2_array[PoseSE2Index.XY])
@@ -174,15 +173,15 @@ def get_starting_lane(
     drivable_area_map: OccupancyMap2D,
 ) -> Lane:
     """
-    Returns the most suitable starting lane in ego's vicinity.
+    Picks the on-route lane ego starts from.
 
     Args:
-        ego_state_se2: state of ego-vehicle
-        route_lane_dict: on-route lane dictionary
-        drivable_area_map: drivable area occupancy map
+        ego_state_se2: Current ego state.
+        route_lane_dict: On-route lanes, keyed by ID.
+        drivable_area_map: Drivable area occupancy map.
 
     Returns:
-        lane object (on-route)
+        The best-aligned lane ego is on, else the closest on-route lane.
     """
     on_route_lanes, heading_error = _get_intersecting_lanes(
         ego_state_se2,
@@ -222,19 +221,19 @@ def get_centerline_as_polyline_se2(
     duplicate_pose_eps: float = 1e-3,
 ) -> PolylineSE2:
     """
-    Applies a Dijkstra search on the lane-graph to retrieve the discrete centerline.
+    Stitches the route centerline from the starting lane with a Dijkstra search on the lane graph.
 
     Args:
-        current_lane: lane object of starting lane.
-        route_lane_group_dict: on-route lane group dictionary
-        route_lane_dict: on-route lane dictionary
-        ego_state_se2: ego state used to sanity-check the centerline starts near ego
-        search_depth: depth of search (for runtime), defaults to 30
-        max_centerline_start_offset: [m] max allowed gap between first centerline point and ego
-        duplicate_pose_eps: [m] consecutive poses closer than this are dropped (stitch boundaries / zero-length connectors)
+        current_lane: Lane to start from.
+        route_lane_group_dict: On-route lane groups, keyed by ID.
+        route_lane_dict: On-route lanes, keyed by ID.
+        ego_state_se2: Current ego state, to check that the centerline starts near ego.
+        search_depth: Number of route lane groups to search ahead.
+        max_centerline_start_offset: [m] Maximum distance between ego and the centerline.
+        duplicate_pose_eps: [m] Consecutive poses closer than this are dropped.
 
     Returns:
-        list of discrete states on centerline (x,y,θ)
+        The centerline.
     """
     lane_groups = list(route_lane_group_dict.values())
     lane_group_ids = list(route_lane_group_dict.keys())
@@ -261,10 +260,7 @@ def get_centerline_as_polyline_se2(
     )
 
     # TODO: @DanielDauner: Refactor these checks and assertions.
-    # Drop consecutive near-duplicate poses. Lane-to-lane stitch boundaries always
-    # duplicate one point; zero-length lane connectors (common in Boston/Singapore
-    # intersections) produce additional duplicates that make shapely's project()
-    # return NaN and that feed singular rows into the LQR fit.
+    # Duplicate poses from stitching and zero-length connectors make shapely's project() return NaN.
     if stacked.shape[0] > 1:
         gaps = np.linalg.norm(np.diff(stacked[:, :2], axis=0), axis=1)
         keep = np.concatenate([[True], gaps > duplicate_pose_eps])
@@ -294,16 +290,15 @@ def get_proposal_paths(
     lateral_offsets: Sequence[float] | None,
 ) -> list[PolylineSE2]:
     """
-    Builds proposal paths: centerline at index 0, plus optional lateral offsets.
+    Builds the proposal paths from the centerline and its lateral offsets.
 
     Args:
-        centerline_polyline_se2: the centerline path to offset from
-        lateral_offsets: optional centerline offsets for proposals
+        centerline_polyline_se2: Centerline to offset.
+        lateral_offsets: [m] Lateral offsets of the centerline, or None for the centerline only.
 
     Returns:
-        list of paths (index 0 is centerline)
+        The centerline followed by its offset copies.
     """
-
     output_paths: list[PolylineSE2] = [centerline_polyline_se2]
     if lateral_offsets is not None:
         for lateral_offset in lateral_offsets:

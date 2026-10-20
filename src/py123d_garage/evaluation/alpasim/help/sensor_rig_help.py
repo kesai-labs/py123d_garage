@@ -1,9 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+"""The AlpaSim camera rig and ego vehicle as 123D metadata."""
+
 from __future__ import annotations
 
 import logging
 from collections.abc import Collection, Sequence
 from pathlib import Path
 
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 import yaml
@@ -21,13 +27,20 @@ from py123d.geometry import PoseSE3
 
 from py123d_garage.config.schema.evaluation.alpasim_config import EgoVehicleConfig
 from py123d_garage.datatypes.numerics import PositiveInt
-from py123d_garage.py123d_help.misc import FRONT_CAMERAS
 
 LOG = logging.getLogger(__name__)
 
 
 def rig_camera_map(sensor_rig_file: str) -> dict[str, CameraID]:
-    """Maps the rig's camera names, which the simulator serves frames under, to 123D camera ids."""
+    """
+    Maps the rig's camera names, which the simulator serves frames under, to 123D camera ids.
+
+    Args:
+        sensor_rig_file: sensor_rig_<dataset>.yaml of the training run.
+
+    Returns:
+        the 123D camera id by simulator camera name.
+    """
     modalities = yaml.safe_load(Path(sensor_rig_file).read_text())["modalities"]
     return {
         modality["camera_name"]: CameraID[key.removeprefix("camera.").upper()]
@@ -36,26 +49,33 @@ def rig_camera_map(sensor_rig_file: str) -> dict[str, CameraID]:
     }
 
 
-def rig_dataset(camera_ids: Collection[CameraID]) -> str:
-    """The dataset whose input-camera slots the rig's cameras fill, or overlap most."""
-    overlaps = {dataset: len(set(cameras) & set(camera_ids)) for dataset, cameras in FRONT_CAMERAS.items()}
-    for dataset, cameras in FRONT_CAMERAS.items():
-        if set(cameras) <= set(camera_ids):
-            return dataset
-    best_dataset, best_overlap = max(overlaps.items(), key=lambda item: item[1])
-    if best_overlap == 0:
-        raise ValueError(
-            f"the rig cameras {sorted(camera_id.name for camera_id in camera_ids)} fill no "
-            f"dataset's front-camera slots; see FRONT_CAMERAS.",
-        )
-    return best_dataset
+def rig_dataset(sensor_rig_file: str) -> str:
+    """
+    The dataset the rig was recorded in, which keys the policy's camera setup.
+
+    Args:
+        sensor_rig_file: sensor_rig_<dataset>.yaml of the training run.
+
+    Returns:
+        the dataset name.
+    """
+    return str(yaml.safe_load(Path(sensor_rig_file).read_text())["dataset"])
 
 
 def rig_camera_metadatas(
     sensor_rig_file: str,
     camera_ids: Collection[CameraID],
 ) -> dict[CameraID, BaseCameraMetadata]:
-    """The rig's full camera calibrations, for the entries that carry one; bridge rigs carry none."""
+    """
+    Reads the rig's full camera calibrations, for the entries that carry one; bridge rigs carry none.
+
+    Args:
+        sensor_rig_file: sensor_rig_<dataset>.yaml of the training run.
+        camera_ids: the cameras to keep.
+
+    Returns:
+        the calibration by camera id.
+    """
     modalities = yaml.safe_load(Path(sensor_rig_file).read_text())["modalities"]
     metadatas: dict[CameraID, BaseCameraMetadata] = {}
     for key, modality in modalities.items():
@@ -68,6 +88,15 @@ def rig_camera_metadatas(
 
 
 def build_ego_metadata(config: EgoVehicleConfig) -> EgoStateSE3Metadata:
+    """
+    Builds the ego vehicle metadata, with the IMU at the rear axle.
+
+    Args:
+        config: the simulated ego vehicle's dimensions.
+
+    Returns:
+        the ego metadata.
+    """
     return EgoStateSE3Metadata(
         vehicle_name=config.vehicle_name,
         width=config.width_m,
@@ -91,7 +120,21 @@ def _ftheta_poly(
     values: Sequence[float],
     name: str,
     logical_id: str,
-) -> npt.NDArray[np.float64]:
+) -> jt.Float64[npt.NDArray[np.float64], " 6"]:
+    """
+    Pads or trims announced f-theta coefficients to the 6 that 123D carries.
+
+    Args:
+        values: the announced polynomial coefficients.
+        name: the polynomial's name, for the error message.
+        logical_id: the camera's name, for the error message.
+
+    Returns:
+        the 6 coefficients.
+
+    Raises:
+        ValueError: if a coefficient past the sixth is nonzero.
+    """
     poly = np.zeros(6, dtype=np.float64)
     coefficients = np.asarray(list(values), dtype=np.float64)
     if coefficients.size > 6:
@@ -112,8 +155,19 @@ def camera_metadata_from_announcement(
     decoded_width: PositiveInt,
 ) -> FThetaCameraMetadata | None:
     """
-    The calibration a session announces for one camera, scaled from its native
-    resolution to the decoded frame; None when the announcement is not f-theta.
+    Reads the calibration a session announces for one camera, scaled from its native resolution to the decoded frame.
+
+    Args:
+        announced: the runtime's camera announcement.
+        camera_id: the 123D camera id.
+        decoded_height: height of the decoded frame in pixels.
+        decoded_width: width of the decoded frame in pixels.
+
+    Returns:
+        the f-theta metadata, or None when the announcement is not f-theta.
+
+    Raises:
+        ValueError: if the announcement has f-theta intrinsics but no native resolution.
     """
     if announced.intrinsics.WhichOneof("camera_param") != "ftheta_param":
         return None
@@ -171,7 +225,16 @@ def build_camera_metadatas(
     images: dict[CameraID, npt.NDArray[np.uint8]],
     camera_id_by_alpasim_id: dict[str, CameraID],
 ) -> dict[CameraID, PinholeCameraMetadata]:
-    """Describes the rendered frames with placeholder calibration; a policy reading intrinsics or mount poses would silently get identity."""
+    """
+    Describes the rendered frames with placeholder calibration, so intrinsics and mount poses are identity.
+
+    Args:
+        images: one rendered frame per camera.
+        camera_id_by_alpasim_id: the 123D camera id by simulator camera name.
+
+    Returns:
+        the placeholder metadata by camera id.
+    """
     name_by_camera_id = {camera_id: name for name, camera_id in camera_id_by_alpasim_id.items()}
     return {
         camera_id: PinholeCameraMetadata(

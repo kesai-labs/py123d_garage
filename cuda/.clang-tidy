@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+Checks: >-
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  concurrency-*,
+  misc-*,
+  performance-*,
+  portability-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-narrowing-conversions,
+  -misc-const-correctness,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+  -misc-use-anonymous-namespace,
+  -misc-use-internal-linkage,
+  -performance-enum-size,
+  -performance-no-int-to-ptr,
+  -performance-unnecessary-value-param
+WarningsAsErrors: "*"
+HeaderFilterRegex: "py123d_garage_cuda/"
+CheckOptions:
+  clang-analyzer-core.CallAndMessage:ArgInitializedness: "false"

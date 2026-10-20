@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for the PDM comfort metrics on synthetic motion profiles with known dynamics."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for the batch kinematic bicycle motion model against hand-computed rigid-body physics."""
 
 from __future__ import annotations

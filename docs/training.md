@@ -1,32 +1,82 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/logo_dark.png">
-  <img src="assets/logo_light.png" alt="Py123d Garage" width="575">
-</picture>
+<img src="assets/logo.png" alt="Py123d Garage" width="630">
 
 </div>
 
-<h1 align="center">Training a policy</h1>
+<h1 align="center">Training</h1>
 
-Build the feature cache first. Training reads tensors from the cache instead of decoding the raw logs, which is several times faster per sample.
+## Overview
 
-```bash
-scripts/cache/<dataset>/build_<model>_cache.sh
-```
+<img src="assets/training_pipeline.svg" alt="Permanent cache, then pretrain, midtrain and posttrain on one 8 x H100 node" width="100%">
 
-The cache signature does not track the builder code. Rebuild by hand after you change a cache builder.
-
-TransFuser trains in two stages. Perception pretraining:
+First build the permanent cache. All three stages share it, so it only needs a rebuild after the policy inputs change (see [Caching system](#caching-system)).
 
 ```bash
-scripts/training/<dataset>/<model>/pretrain.sh
+scripts/cache/build_cache.sh
 ```
 
-Then planning posttraining, which starts from the pretrained weights. Point `initial_weights_file` in the script at the checkpoint of your pretraining run.
+Then train the three stages in one session:
 
 ```bash
-scripts/training/<dataset>/<model>/posttrain.sh
+# Either on all data
+scripts/training/train_all.sh
+
+# Or on nuPlan only
+scripts/training/train_nuplan.sh
 ```
 
-The scripts run on a single host and under SLURM. They derive the per-GPU batch size from the visible devices.
+The table below gives the training times on all data, measured on one 8 x H100 node with the CUDA kernels enabled. Each stage starts with 20 to 40 minutes of data staging, kernel check and compilation before its first step; the times include them.
+
+| Stage     |  Epochs | Super-epochs | Per epoch | Time on 8 x H100 |
+| :-------- | ------: | -----------: | --------: | ---------------: |
+| Pretrain  |      93 |           31 |   5.2 min |            8.9 h |
+| Midtrain  |      45 |           15 |   8.4 min |            6.7 h |
+| Posttrain |      45 |           15 |   5.9 min |            5.0 h |
+| **Total** | **183** |       **61** |           |       **20.6 h** |
+
+## Accelerate small-scale experiments with multi-seed training
+
+Closed-loop scores vary from seed to seed, so we train three and report their mean. A single TransFuser leaves most of a modern GPU idle, so the three seeds train together in one job and share one data loader, at little more than the cost of one.
+
+<img src="assets/training_seed_bubbles.svg" alt="GPU timeline of one seed vs three seeds per training step" width="100%">
+
+Each seed still trains as it would alone. The loader loads three times the batch and hands every seed its own third, a stage runs three times the epochs, and the cosine warm-restart schedule and the checkpoint interval stretch by the same factor. Three epochs make a super-epoch: the thirds rotate within it, so every seed sees every sample once and no two seeds see the same sample in the same step. Seed *i* of a stage continues from seed *i* of the stage before.
+
+<img src="assets/training_seeds.svg" alt="Seeds and super-epochs" width="100%">
+
+To train one seed only, pass `num_seeds=1` and a third of the epochs, `lightning_trainer_config.max_epochs=31` for the pretrain and `15` for the two later stages. The batch, the schedule and the checkpoint interval follow the seed count by themselves, and the next stage takes the single weights file in `initial_weights_files`.
+
+## Modify, compile and use custom CUDA kernels
+
+<img src="assets/training_kernels.svg" alt="Which PyTorch modules the CUDA kernels replace during training" width="100%">
+
+Optional CUDA kernels replace parts of the encoders, the heads and the motion planner. They mirror the PyTorch code and are used in training only, so evaluation and checkpoints never depend on them. They need an Ampere or newer GPU, the fastest ones Hopper. Before the first step, a check runs one batch with and without them: a requested kernel that falls back to PyTorch on any call, because of the GPU, the batch's shapes or another kernel replacing it, stops the run and names the reason; `kernel_check_require_patches=false` trains on PyTorch instead. On H100, with every kernel, they shorten the training step by about 17 % in pretraining and by about 30 to 35 % in midtraining and posttraining:
+
+| Stage     | Step time saved with CUDA kernels | MFU with PyTorch | MFU with CUDA kernels |
+| :-------- | --------------------------------: | ---------------: | --------------------: |
+| Pretrain  |                             ~17 % |            ~19 % |                 ~23 % |
+| Midtrain  |                             ~35 % |            ~15 % |                 ~23 % |
+| Posttrain |                             ~29 % |            ~12 % |                 ~17 % |
+
+Build them once against the installed PyTorch, and again after every change of the kernels:
+
+```bash
+# Install CUDA-toolkits once
+conda install -c conda-forge cuda-nvcc=12.8 cuda-cudart-dev=12.8 cuda-cccl=12.8 cuda-driver-dev=12.8 libcublas-dev libcusparse-dev libcusolver-dev libcurand-dev cuda-version=12.8 gcc_linux-64=13 gxx_linux-64=13 ninja
+
+# Compile kernels
+TORCH_CUDA_ARCH_LIST=9.0 CUDA_INC_PATH="$CONDA_PREFIX/targets/x86_64-linux/include" pip install --no-build-isolation ./cuda
+```
+
+Then enable them in the training script.
+
+## Caching system
+
+<img src="assets/training_cache.svg" alt="Permanent cache, local copy and session cache" width="100%">
+
+The permanent cache holds images, BEV maps and boxes. It is built once, on one machine or as a Slurm array, and all stages share it. Rebuild it after changing the policy inputs.
+
+The session cache holds ego state, trajectory labels and target points. These depend on the stage, so every stage builds its own from the 123D logs: while the stage before it trains, or else during its first epoch.
+
+Both live on a fast local disk when the training script names one; we use each job's SSD. Each log of the permanent cache is copied there on its first read, which avoids random reads over the network file system, and the three stages share that copy. Without a local disk there is no session cache.

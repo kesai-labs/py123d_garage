@@ -1,0 +1,13 @@
+# @package _global_
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+# Only the nuPlan track's front camera at the challenge's 1920x1080, for a policy that reads no other camera; a third of
+# nuplan_3cam's rendering.
+runtime:
+  simulation_config:
+    cameras:
+      - logical_id: CAM_F0
+        frame_interval_us: 500_000
+        height: 1080
+        width: 1920

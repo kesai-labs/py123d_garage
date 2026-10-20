@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Glue between the garage and py123d's scene API."""
 
 from __future__ import annotations
@@ -15,11 +18,14 @@ from py123d_garage.py123d_help.scene_filters import (
     GarageSceneFilter,
     has_box_detections,
     is_navtest_scene,
+    is_not_nurec_clip,
+    is_nurec_hard_scene,
     plausible_ego_motion,
     plausible_route,
 )
 from py123d_garage.py123d_help.scene_readers import (
     InsufficientRouteError,
+    get_target_point_poses,
     get_target_points,
 )
 
@@ -32,9 +38,12 @@ __all__ = [
     "VerboseThreadPoolExecutor",
     "build_scene_builder",
     "find_log_names",
+    "get_target_point_poses",
     "get_target_points",
     "has_box_detections",
     "is_navtest_scene",
+    "is_not_nurec_clip",
+    "is_nurec_hard_scene",
     "plausible_ego_motion",
     "plausible_route",
 ]

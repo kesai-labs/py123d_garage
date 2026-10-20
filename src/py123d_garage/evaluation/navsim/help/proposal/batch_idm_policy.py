@@ -28,16 +28,16 @@ class BatchIDMPolicy:
         acceleration_exponent: float = 10,
     ):
         """
-        Constructor for BatchIDMPolicy.
+        Sets up one IDM policy per list entry; a float parameter is shared by all policies.
 
         Args:
-            fallback_target_velocity: Desired fallback velocity in free traffic [m/s]
-            speed_limit_fraction: Fraction of speed-limit desired in free traffic
-            min_gap_to_lead_agent: Minimum relative distance to lead vehicle [m]
-            headway_time: Desired time headway. Minimum time to the vehicle in front [s]
-            accel_max: maximum acceleration [m/s^2]
-            decel_max: maximum deceleration (positive value) [m/s^2]
-            acceleration_exponent: acceleration exponent of IDM.
+            fallback_target_velocity: Free-traffic velocity used when the speed limit is unknown, in m/s.
+            speed_limit_fraction: Fraction of the speed limit desired in free traffic.
+            min_gap_to_lead_agent: Minimum distance to the lead agent, in meters.
+            headway_time: Desired time gap to the lead agent, in seconds.
+            accel_max: Maximum acceleration, in m/s^2.
+            decel_max: Maximum deceleration as a positive value, in m/s^2.
+            acceleration_exponent: Acceleration exponent of IDM.
         """
         if speed_limit_fraction is None:
             speed_limit_fraction = [0.2, 0.4, 0.6, 0.8, 1.0]
@@ -100,7 +100,7 @@ class BatchIDMPolicy:
             self._accel_max[i] = accel_max[i] if isinstance(accel_max, list) else accel_max
             self._decel_max[i] = decel_max[i] if isinstance(decel_max, list) else decel_max
 
-        # lazy loaded
+        # Set by update().
         self._target_velocities: npt.NDArray[np.float64] = np.zeros(
             (self._num_policies),
             dtype=np.float64,
@@ -108,22 +108,31 @@ class BatchIDMPolicy:
 
     @property
     def num_policies(self) -> int:
-        """Number of IDM policies in the batch."""
+        """
+        The number of IDM policies in the batch.
+
+        Returns:
+            The number of policies.
+        """
         return self._num_policies
 
     @property
     def max_target_velocity(self) -> float:
-        """Highest target velocity across policies [m/s]."""
+        """
+        The highest target velocity across policies.
+
+        Returns:
+            The target velocity in m/s.
+        """
         return float(np.max(self._target_velocities))
 
     def update(self, speed_limit_mps: float | None) -> None:
         """
-        Recomputes target velocities from the current speed limit.
+        Recomputes the target velocities from the current speed limit.
 
         Args:
-            speed_limit_mps: speed limit of current lane [m/s]
+            speed_limit_mps: Speed limit of the current lane in m/s, or None to use the fallback velocities.
         """
-
         if speed_limit_mps is not None:
             self._target_velocities = self._speed_limit_fractions * speed_limit_mps
         else:
@@ -141,18 +150,17 @@ class BatchIDMPolicy:
         sampling_time: float,
     ) -> jt.Float64[npt.NDArray[np.float64], "batch 2"]:
         """
-        Propagates IDM policies for one time-step.
+        Propagates the IDM policies by one time step.
 
         Args:
-            previous_idm_states: array containing previous state
-            leading_agent_states: array contains leading vehicle information
-            longitudinal_idcs: indices of policies to be applied over a batch-dim
-            sampling_time: time to propagate forward [s]
+            previous_idm_states: Progress and velocity of each batch entry.
+            leading_agent_states: Progress, velocity and rear length of the lead agent of each batch entry.
+            longitudinal_idcs: Index of the policy applied to each batch entry.
+            sampling_time: Time step, in seconds.
 
         Returns:
-            array containing propagated state values
+            The propagated progress and velocity of each batch entry.
         """
-
         assert len(previous_idm_states) == len(longitudinal_idcs), (
             "PDMIDMPolicy: propagate function requires equal length of input arguments!"
         )
@@ -160,7 +168,6 @@ class BatchIDMPolicy:
             "PDMIDMPolicy: propagate function requires equal length of input arguments!"
         )
 
-        # state variables
         x_agent, v_agent = (
             previous_idm_states[:, StateIDMIndex.PROGRESS],
             previous_idm_states[:, StateIDMIndex.VELOCITY],
@@ -172,7 +179,6 @@ class BatchIDMPolicy:
             leading_agent_states[:, LeadingAgentIndex.LENGTH_REAR],
         )
 
-        # parameters
         (
             target_velocity,
             min_gap_to_lead_agent,
@@ -187,7 +193,6 @@ class BatchIDMPolicy:
             self._decel_max[longitudinal_idcs],
         )
 
-        # convenience definitions
         s_star = (
             min_gap_to_lead_agent
             + v_agent * headway_time
@@ -199,13 +204,11 @@ class BatchIDMPolicy:
             min_gap_to_lead_agent,
         )  # clamp to avoid zero division
 
-        # differential equations
         x_agent_dot = v_agent
         v_agent_dot = accel_max * (
             1 - (v_agent / target_velocity) ** self._acceleration_exponent - (s_star / s_alpha) ** 2
         )
 
-        # clip values
         v_agent_dot = np.clip(v_agent_dot, -decel_max, accel_max)
 
         next_idm_states: npt.NDArray[np.float64] = np.zeros(

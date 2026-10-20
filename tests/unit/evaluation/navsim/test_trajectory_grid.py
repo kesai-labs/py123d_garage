@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """The sampling grid PDM scores trajectories and proposals on."""
 
 from __future__ import annotations

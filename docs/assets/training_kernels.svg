@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 742" width="1600" height="742">
+  <defs>
+    <marker id="m" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#9a9a9a" />
+    </marker>
+  </defs>
+  <rect x="0.0" y="0.0" width="1600.0" height="742.0" rx="24" fill="#f5f3ee" />
+  <text x="300.0" y="66.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">Default: PyTorch</text>
+  <text x="760.0" y="66.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">kernel_patches entry</text>
+  <text x="760.0" y="90.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#555555" text-anchor="middle">in py123d_garage_cuda.transfuser</text>
+  <text x="1260.0" y="66.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">Opt-in, training only</text>
+  <text x="80.0" y="114.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="18" font-weight="500" fill="#555555" text-anchor="start">backbone_config.kernel_patches</text>
+  <rect x="80.0" y="130.0" width="440.0" height="70.0" rx="12" fill="#5c5c5c" />
+  <text x="300.0" y="161.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Image stem</text>
+  <text x="300.0" y="185.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#ffffff" text-anchor="middle">conv1 → bn1 → ReLU → max-pool</text>
+  <rect x="1000.0" y="130.0" width="520.0" height="70.0" rx="12" fill="#ffbe27" />
+  <text x="1260.0" y="161.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">Fused stem kernels</text>
+  <text x="1260.0" y="185.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#3d3d3d" text-anchor="middle">conv with BN statistics, then BN · ReLU · max-pool</text>
+  <path d="M528 165 L588 165" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <path d="M928 165 L988 165" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <rect x="600.0" y="130.0" width="320.0" height="70.0" rx="14" fill="#efebe3" />
+  <text x="760.0" y="158.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">resnet</text>
+  <text x="760.0" y="184.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">:fuse_stem</text>
+  <rect x="80.0" y="216.0" width="440.0" height="70.0" rx="12" fill="#5c5c5c" />
+  <text x="300.0" y="247.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Latent BEV stem</text>
+  <text x="300.0" y="271.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#ffffff" text-anchor="middle">runs on every sample</text>
+  <rect x="1000.0" y="216.0" width="520.0" height="70.0" rx="12" fill="#141414" />
+  <text x="1260.0" y="247.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Shared latent BEV stem</text>
+  <text x="1260.0" y="271.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#ffffff" text-anchor="middle">runs on one sample, expanded at the first fusion</text>
+  <path d="M528 251 L588 251" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <path d="M928 251 L988 251" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <rect x="600.0" y="216.0" width="320.0" height="70.0" rx="14" fill="#efebe3" />
+  <text x="760.0" y="257.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">share_latent_bev_stem</text>
+  <text x="80.0" y="338.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="18" font-weight="500" fill="#555555" text-anchor="start">planning_config.kernel_patches</text>
+  <rect x="80.0" y="354.0" width="440.0" height="70.0" rx="12" fill="#5c5c5c" />
+  <text x="300.0" y="385.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Motion planner attention</text>
+  <text x="300.0" y="409.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#ffffff" text-anchor="middle">QK-norm, mask, softmax, dropout</text>
+  <rect x="1000.0" y="354.0" width="520.0" height="70.0" rx="12" fill="#ffbe27" />
+  <text x="1260.0" y="385.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">planner_attention</text>
+  <text x="1260.0" y="409.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#3d3d3d" text-anchor="middle">one kernel, mask tiles skipped</text>
+  <path d="M528 389 L588 389" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <path d="M928 389 L988 389" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <rect x="80.0" y="440.0" width="440.0" height="70.0" rx="12" fill="#5c5c5c" />
+  <text x="300.0" y="471.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Motion planner feed-forward</text>
+  <text x="300.0" y="495.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#ffffff" text-anchor="middle">projection → SwiGLU → dropout</text>
+  <rect x="1000.0" y="440.0" width="520.0" height="70.0" rx="12" fill="#ffbe27" />
+  <text x="1260.0" y="471.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">planner_swiglu_linear</text>
+  <text x="1260.0" y="495.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#3d3d3d" text-anchor="middle">SwiGLU and dropout in the GEMM epilogue</text>
+  <path d="M528 475 L588 475" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <path d="M928 475 L988 475" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <rect x="80.0" y="526.0" width="440.0" height="70.0" rx="12" fill="#5c5c5c" />
+  <text x="300.0" y="557.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle">Motion planner adaptive norm</text>
+  <text x="300.0" y="581.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#ffffff" text-anchor="middle">residual, gate, LayerNorm, modulation</text>
+  <rect x="1000.0" y="526.0" width="520.0" height="70.0" rx="12" fill="#ffbe27" />
+  <text x="1260.0" y="557.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="middle">planner_adaptive_norm</text>
+  <text x="1260.0" y="581.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="17" font-weight="400" fill="#3d3d3d" text-anchor="middle">the same steps, fused</text>
+  <path d="M528 561 L588 561" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <path d="M928 561 L988 561" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <rect x="600.0" y="354.0" width="320.0" height="70.0" rx="14" fill="#efebe3" />
+  <text x="760.0" y="382.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">planner</text>
+  <text x="760.0" y="408.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">:patch_planner_attention</text>
+  <rect x="600.0" y="440.0" width="320.0" height="70.0" rx="14" fill="#efebe3" />
+  <text x="760.0" y="459.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">planner</text>
+  <text x="760.0" y="480.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">:patch_planner_swiglu</text>
+  <text x="760.0" y="501.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">:patch_planner_feed_forward</text>
+  <rect x="600.0" y="526.0" width="320.0" height="70.0" rx="14" fill="#efebe3" />
+  <text x="760.0" y="554.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">adaptive_norm</text>
+  <text x="760.0" y="580.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="17" font-weight="500" fill="#141414" text-anchor="middle">:patch_planner_adaptive_norm</text>
+  <rect x="80.0" y="632.0" width="28.0" height="22.0" rx="5" fill="#5c5c5c" />
+  <text x="118.0" y="650.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="start">PyTorch</text>
+  <rect x="300.0" y="632.0" width="28.0" height="22.0" rx="5" fill="#ffbe27" />
+  <text x="338.0" y="650.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="start">CUDA kernel</text>
+  <rect x="520.0" y="632.0" width="28.0" height="22.0" rx="5" fill="#141414" />
+  <text x="558.0" y="650.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="start">PyTorch patch</text>
+  <text x="800.0" y="702.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#555555" text-anchor="middle">Patches apply in place when training starts. Parameters and state_dict keys stay the same, so evaluation loads the checkpoint into the PyTorch modules.</text>
+</svg>

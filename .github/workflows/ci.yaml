@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 name: ci
 on:
   push:
@@ -18,7 +21,7 @@ concurrency:
 
 jobs:
   ci:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: ${{ github.repository_owner == 'kesai-labs' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +31,7 @@ jobs:
       - uses: ./.github/actions/python_venv
 
       - name: Install py123d-garage
-        run: uv pip install -e ".[train]" --group dev
+        run: uv pip install -e ".[train,alpasim]" --group dev
 
       - name: Run pre-commit
         run: pre-commit run --all-files
@@ -41,6 +44,11 @@ jobs:
         # (see src/py123d_garage/__init__.py).
         env:
           PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "true"
+          # Four of the runner's jobs share its 32 cores; uncapped, torch, OpenBLAS, OpenCV and numba each take all
+          # of them per job, and OpenCV and numba ignore OMP_NUM_THREADS.
+          OMP_NUM_THREADS: "8"
+          OPENCV_FOR_THREADS_NUM: "8"
+          NUMBA_NUM_THREADS: "8"
           # Presets resolve dataset paths from this; no data exists in ci.
           PY123D_GARAGE_DATA_ROOT: "/data"
         # -m "" also runs the slow-marked unit tests that local runs deselect.
@@ -57,3 +65,66 @@ jobs:
             echo '```'
             echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  kernels:
+    if: ${{ github.repository_owner == 'kesai-labs' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    runs-on: self-hosted
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/memory_report
+
+      - uses: ./.github/actions/python_venv
+
+      - uses: ./.github/actions/cuda_toolchain
+
+      - name: Install py123d-garage and the build backend of the kernels
+        run: uv pip install -e ".[train]" --group dev setuptools wheel
+
+      - name: Build the kernels for sm_80, sm_90a and this runner's GPU with warnings as errors
+        env:
+          MAX_JOBS: "4"
+        run: |
+          torch_includes="$(python -c 'import torch.utils.cpp_extension as e; print(" ".join(f"-isystem {p}" for p in e.include_paths()))')"
+          gpu="$(python -c 'import torch; print("%d.%d" % torch.cuda.get_device_capability())')"
+          export CFLAGS="-Wall -Wextra -Werror $torch_includes" CXXFLAGS="-Wall -Wextra -Werror $torch_includes"
+          export NVCC_APPEND_FLAGS="-Werror all-warnings -Xcompiler=-Wall,-Wextra,-Werror -Xptxas -v $torch_includes"
+          TORCH_CUDA_ARCH_LIST="8.0;9.0a;$gpu" uv pip install -v --no-build-isolation ./cuda 2>&1 | tee "$RUNNER_TEMP/kernels_build.log"
+
+      - name: Compare every kernel's register spills with cuda/ptxas_spills.json
+        run: python .github/scripts/ptxas_spills.py check "$RUNNER_TEMP/kernels_build.log"
+
+      - name: Analyze the kernels with clang-tidy
+        run: |
+          python .github/scripts/clang_tidy_compile_commands.py "$RUNNER_TEMP/clang_tidy"
+          run-clang-tidy -p "$RUNNER_TEMP/clang_tidy" -j 2 -quiet
+
+      - name: Test the kernels
+        env:
+          PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "true"
+          # Four of the runner's jobs share its 32 cores; uncapped, torch, OpenBLAS, OpenCV and numba each take all
+          # of them per job, and OpenCV and numba ignore OMP_NUM_THREADS.
+          OMP_NUM_THREADS: "8"
+          OPENCV_FOR_THREADS_NUM: "8"
+          NUMBA_NUM_THREADS: "8"
+        run: pytest tests/cuda_unit
+
+      - name: Test the kernels again under compute-sanitizer, for memory errors and shared-memory races
+        env:
+          PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "true"
+          # Four of the runner's jobs share its 32 cores; uncapped, torch, OpenBLAS, OpenCV and numba each take all
+          # of them per job, and OpenCV and numba ignore OMP_NUM_THREADS.
+          OMP_NUM_THREADS: "8"
+          OPENCV_FOR_THREADS_NUM: "8"
+          NUMBA_NUM_THREADS: "8"
+          # The model-level files build whole backbones; under the sanitizer they exceed the runner's memory cap.
+          KERNEL_TESTS: >-
+            tests/cuda_unit
+            --ignore=tests/cuda_unit/transfuser/test_patch_equivalence.py
+            --ignore=tests/cuda_unit/transfuser/test_kernel_verification.py
+        # racecheck instruments every shared-memory access, so it gets one small launch per op; a warning-level
+        # hazard, two lanes writing different values without a barrier between them, fails the step.
+        run: |
+          compute-sanitizer --tool memcheck --error-exitcode 1 --print-limit 20 python -m pytest $KERNEL_TESTS -q
+          compute-sanitizer --tool racecheck --error-exitcode 1 --print-limit 20 python -m pytest tests/cuda_unit/transfuser/test_opcheck_sweep.py -q

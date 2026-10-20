@@ -22,20 +22,16 @@ from py123d_garage.evaluation.navsim.help.utils.pdm_array_representation import 
 
 
 class PDMSimulator:
-    """Re-implementation of nuPlan's simulation pipeline. Enables batch-wise simulation."""
+    """Batch re-implementation of nuPlan's simulation: LQR tracking plus a kinematic bicycle model."""
 
     def __init__(self, proposal_grid: TrajectoryGrid):
         """
-        Constructor of PDMSimulator.
+        Sets up the tracker and the motion model.
 
         Args:
-            proposal_grid: Sampling parameters for proposals
+            proposal_grid: Grid of the proposals to simulate.
         """
-
-        # time parameters
         self.proposal_grid = proposal_grid
-
-        # simulation objects
         self._motion_model = BatchKinematicBicycleModel()
         self._tracker = BatchLQRTracker()
 
@@ -45,16 +41,15 @@ class PDMSimulator:
         initial_ego_state: EgoStateSE2,
     ) -> jt.Float64[npt.NDArray[np.float64], "proposals sim_times 11"]:
         """
-        Simulate all proposals over batch-dim.
+        Simulates ego tracking each proposal from the current ego state.
 
         Args:
-            states: proposal states as array
-            initial_ego_state: ego-vehicle state at current iteration
+            states: Proposal states to track.
+            initial_ego_state: Current ego state.
 
         Returns:
-            simulated proposal states as array
+            The simulated ego states of each proposal over the proposal horizon.
         """
-
         proposal_states = states[:, : self.proposal_grid.num_poses + 1]
         discretization_time = self.proposal_grid.interval_s
         velocity_profile, curvature_profile = self._tracker.compute_reference_profiles(
@@ -62,7 +57,6 @@ class PDMSimulator:
             discretization_time=discretization_time,
         )
 
-        # state array representation for simulated vehicle states
         simulated_states = np.zeros(proposal_states.shape, dtype=np.float64)
         simulated_states[:, 0] = ego_state_to_state_array(initial_ego_state)
         simulated_timestamps = np.zeros(
@@ -78,7 +72,6 @@ class PDMSimulator:
         sampling_time: Timestamp = Timestamp.from_us(delta_time_point)
 
         for time_idx in range(1, self.proposal_grid.num_poses + 1):
-            # 1. Track the trajectory with controller to get commands (steering rate and acceleration)
             command_states = self._tracker.track_trajectory(
                 time_idx=time_idx - 1,
                 initial_states=simulated_states[:, time_idx - 1],
@@ -89,11 +82,10 @@ class PDMSimulator:
                 ego_wheel_base=initial_ego_state.metadata.wheel_base,
             )
 
-            # 2. Propagate the state with the motion model and commands
             simulated_states[:, time_idx] = self._motion_model.propagate_state(
                 states=simulated_states[:, time_idx - 1],
                 command_states=command_states,
-                sampling_time=sampling_time,  # convert from us to s
+                sampling_time=sampling_time,
                 ego_metadata=initial_ego_state.metadata,
             )
 

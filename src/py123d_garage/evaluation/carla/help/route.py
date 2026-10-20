@@ -1,9 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """The leaderboard's route as the 123D route polyline a policy is conditioned on."""
 
 from __future__ import annotations
 
 from typing import Any
 
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 from py123d.datatypes.metadata.route_metadata import RouteMetadata
@@ -17,12 +21,7 @@ _PROGRESS_SEARCH_M = 20.0
 
 
 class Route:
-    """
-    The driven route, and how far along it the ego has come.
-
-    Rebuilds the ``route_position`` modality the training logs carry, so
-    evaluation conditions the policy through the same code path training does.
-    """
+    """The driven route as the ``route_position`` modality the training logs carry, and the ego's progress on it."""
 
     def __init__(
         self,
@@ -78,12 +77,11 @@ class Route:
         """The polyline as the route modality of a 123D log carries it."""
         return self._metadata
 
-    def advance(self, position_xy: npt.NDArray[np.float64]) -> NonNegativeFloat:
+    def advance(self, position_xy: jt.Float64[npt.NDArray[np.float64], " 2"]) -> NonNegativeFloat:
         """
         Advances the ego's position along the route and returns its arc length.
 
-        Progress only ever moves forward, so a route that crosses itself and an
-        ego that is pushed backwards both keep their place.
+        Progress only moves forward, so a self-crossing route or an ego pushed backwards keeps its place.
 
         Args:
             position_xy: the ego rear-axle position in the ISO world frame.

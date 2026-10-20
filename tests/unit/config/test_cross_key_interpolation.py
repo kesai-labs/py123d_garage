@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 import pytest
@@ -11,7 +14,7 @@ def test_cross_key_interpolation_is_rejected() -> None:
         load_config(
             TrainingConfig,
             "train",
-            args=["initial_weights_file=${compile_mode}"],
+            args=["cache_mirror_root=${compile_mode}"],
         )
 
 
@@ -28,6 +31,6 @@ def test_env_resolver_is_allowed() -> None:
     config = load_config(
         TrainingConfig,
         "train",
-        args=["training=py123d_garage.config.presets.python.training.transfuser:tf_carla_train"],
+        args=["training=py123d_garage.config.presets.training.latent_transfuser:pretrain"],
     )
-    assert config.offline_data_sources["carla"].data_root == "/data/lead/123D"
+    assert config.offline_data_sources[0].data_root == "/data/physical-ai-av/123D"

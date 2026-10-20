@@ -1,9 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/logo_dark.png">
-  <img src="assets/logo_light.png" alt="Py123d Garage" width="575">
-</picture>
+<img src="assets/logo.png" alt="Py123d Garage" width="630">
 
 </div>
 
@@ -12,13 +9,6 @@
 If you use this software, please cite it as follows:
 
 ```bibtex
-@misc{py123d_garage,
-  title={py123d_garage: end-to-end driving policies across datasets},
-  author={KE:SAI},
-  howpublished={\url{https://github.com/kesai-labs/py123d_garage}},
-  year={2026}
-}
-
 @article{Dauner2026ARXIV,
   title={123D: Unifying Multi-Modal Autonomous Driving Data at Scale},
   author={Dauner, Daniel and Charraut, Valentin and Berle, Bastian and Li, Tianyu and Nguyen, Long and Wang, Jiabao and Jing, Changhui and Igl, Maximilian and Caesar, Holger and Ivanovic, Boris and Geiger, Andreas and Chitta, Kashyap},
@@ -29,7 +19,7 @@ If you use this software, please cite it as follows:
 
 ## Baselines
 
-The policy baselines build on [LEAD](https://github.com/kesai-labs/lead) (TransFuser) and [VideoActionModel](https://github.com/valeoai/VideoActionModel) (VaVAM). If you use them, please also cite:
+The policy baselines build on [LEAD TransFuser v6](https://github.com/kesai-labs/lead) (TransFuser) and [VideoActionModel](https://github.com/valeoai/VideoActionModel) (VaVAM). If you use them, please also cite:
 
 ```bibtex
 @inproceedings{Nguyen2026CVPR,

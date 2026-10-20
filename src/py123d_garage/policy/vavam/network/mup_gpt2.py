@@ -3,21 +3,9 @@
 # Adapted from valeoai/VideoActionModel (MIT License).
 
 """
-A modified GPT
-Original code: https://github.com/karpathy/nanoGPT/blob/master/model.py
+muP GPT2 video model that predicts the next visual token, modified from https://github.com/karpathy/nanoGPT/blob/master/model.py.
 
-Full definition of a GPT Language Model, all of it in this single file.
-References:
-1) the official GPT-2 TensorFlow implementation released by OpenAI:
-https://github.com/openai/gpt-2/blob/master/src/model.py
-2) huggingface/transformers PyTorch implementation:
-https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
-
-mup:
-LayerNorm elementwise_affine=False  (see https://arxiv.org/abs/2404.05728)
-MuReadout
-MuSharedReadout
-normal_ init
+It uses affine-free LayerNorms (see https://arxiv.org/abs/2404.05728), MuReadout heads and the muP normal_ init.
 """
 
 import os
@@ -36,14 +24,9 @@ from py123d_garage.policy.vavam.network.prepare_token_sequence import compute_po
 
 class KVCache(nn.Module):
     """
-    Adapted from
-    https://github.com/karpathy/nano-llama31/blob/06461cada7744a7da86a408f094549800b6bee3f/llama31.py#L141
+    Preallocated key/value cache of one attention layer, adapted from karpathy/nano-llama31.
 
-    It is a simplified version as we assume that for each element of the batch there
-    the same number of tokens.
-
-    Also note that for the attention mask, we either have to recompute the full cache,
-    so we use the causal mask, or we foward a single token so we don't need the mask.
+    Every sample holds the same number of tokens, and a pass either recomputes the whole cache with the causal mask or feeds one token without a mask.
     """
 
     def __init__(
@@ -56,6 +39,18 @@ class KVCache(nn.Module):
         device: torch.device,
         layer_idx: int = 0,
     ) -> None:
+        """
+        Allocates the zeroed cache buffers.
+
+        Args:
+            batch_size: number of samples.
+            seq_length: maximum number of cached tokens.
+            n_kv_heads: number of attention heads.
+            head_dim: width of one attention head.
+            dtype: dtype of the buffers.
+            device: device of the buffers.
+            layer_idx: index of the layer the cache belongs to.
+        """
         super().__init__()
         cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
         self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
@@ -64,12 +59,22 @@ class KVCache(nn.Module):
         self.layer_idx = layer_idx
 
     def reset(self) -> None:
+        """Zeroes the cache and restarts it at position 0."""
         self.cache_k.zero_()
         self.cache_v.zero_()
         self.start_pos = 0
 
     def update(self, xk: Tensor, xv: Tensor) -> Tuple[Tensor, Tensor]:
-        # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
+        """
+        Appends new keys and values and returns everything cached so far.
+
+        Args:
+            xk: new keys shaped [batch, heads, seq, head_dim].
+            xv: new values shaped [batch, heads, seq, head_dim].
+
+        Returns:
+            all cached keys and values, including the new ones.
+        """
         seqlen = xk.size(2)
         self.cache_k[:, :, self.start_pos : self.start_pos + seqlen] = xk
         self.cache_v[:, :, self.start_pos : self.start_pos + seqlen] = xv
@@ -80,14 +85,31 @@ class KVCache(nn.Module):
 
 
 class MLP(nn.Module):
+    """Feed-forward layer of a transformer block."""
 
     def __init__(self, dim_model: int, hidden_dim_mult: int = 4) -> None:
+        """
+        Creates the two projections.
+
+        Args:
+            dim_model: model width.
+            hidden_dim_mult: hidden width as a multiple of the model width.
+        """
         super().__init__()
         self.c_fc = nn.Linear(dim_model, hidden_dim_mult * dim_model, bias=False)
         self.gelu = nn.GELU()
         self.c_proj = nn.Linear(hidden_dim_mult * dim_model, dim_model, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
+        """
+        Applies the feed-forward layer.
+
+        Args:
+            x: features shaped [batch, seq, dim_model].
+
+        Returns:
+            the features with the same shape.
+        """
         x = self.c_fc(x)
         x = self.gelu(x)
         x = self.c_proj(x)
@@ -95,8 +117,18 @@ class MLP(nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
+    """Multi-head self-attention with muP scaling, an explicit mask and an optional KV cache."""
 
     def __init__(self, dim_model: int, dim_heads: int, block_size: int, attn_scale: float) -> None:
+        """
+        Creates the projections.
+
+        Args:
+            dim_model: model width.
+            dim_heads: width of one attention head.
+            block_size: maximum sequence length, used only by the slow attention fallback.
+            attn_scale: multiplier on the muP attention scale.
+        """
         super().__init__()
         assert dim_model % dim_heads == 0, "dim_model must be divisible by dim_heads"
 
@@ -104,69 +136,68 @@ class CausalSelfAttention(nn.Module):
         self.dim_model = dim_model
         self.nb_heads = dim_model // dim_heads
 
-        ########### muP ###########
         self.attn_scale = attn_scale
-        self.attn_score = nn.Identity()  # just for coordcheck
-        self.query = nn.Identity()  # just for coordcheck
-        self.key = nn.Identity()  # just for coordcheck
-        self.value = nn.Identity()  # just for coordcheck
+        # Identity hooks for muP coordinate checks.
+        self.attn_score = nn.Identity()
+        self.query = nn.Identity()
+        self.key = nn.Identity()
+        self.value = nn.Identity()
 
-        # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(dim_model, 3 * dim_model, bias=False)
 
-        # output projection
         self.c_proj = nn.Linear(dim_model, dim_model, bias=False)
 
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
-            # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size))
 
-        # will be KVCache object managed by inference context manager
+        # Set by MupGPT2._setup_kv_cache during generation.
         self.cache = None
 
     def forward(self, x: Tensor, attn_mask: Tensor) -> Tensor:
+        """
+        Applies masked self-attention, reading and extending the KV cache when one is set.
 
-        # calculate query, key, values for all heads in batch
+        Args:
+            x: features shaped [batch, seq, dim_model].
+            attn_mask: boolean attention mask, or None for full attention.
+
+        Returns:
+            the attended features shaped [batch, seq, dim_model].
+        """
         x = self.c_attn(x)
 
-        # split into qkv and heads
         q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
 
-        # KV cache update
         if self.cache is not None:
-            # update the KV cache with current KV and get all the previous KVs
             k, v = self.cache.update(k, v)
 
-        ### muP: just for coord check (debug)
         q = self.query(q)
         k = self.key(k)
         v = self.value(v)
 
-        ### muP: attention scaling 1/dim_heads instead of 1/sqrt(dim_heads)
+        # muP scales attention by 1/dim_heads instead of 1/sqrt(dim_heads).
         attn_scaling = self.attn_scale / v.size(-1)
 
-        # efficient attention using Flash Attention CUDA kernels
         y = torch.nn.functional.scaled_dot_product_attention(
             q,
             k,
             v,
             attn_mask=attn_mask,
             is_causal=False,
-            scale=attn_scaling,  # muP: attention scaling
+            scale=attn_scaling,
         )
 
-        y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
+        y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")
 
-        # output projection
         y = self.c_proj(y)
 
         return y
 
 
 class Block(nn.Module):
+    """Pre-norm transformer block of the video model."""
 
     def __init__(
         self,
@@ -176,6 +207,16 @@ class Block(nn.Module):
         attn_scale: float,
         mlp_dim_mult: int = 4,
     ) -> None:
+        """
+        Creates the block layers.
+
+        Args:
+            dim_model: model width.
+            dim_heads: width of one attention head.
+            block_size: maximum sequence length.
+            attn_scale: multiplier on the muP attention scale.
+            mlp_dim_mult: hidden width of the MLP as a multiple of the model width.
+        """
         super().__init__()
         self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=False)
         self.attn = CausalSelfAttention(dim_model, dim_heads, block_size, attn_scale)
@@ -183,23 +224,23 @@ class Block(nn.Module):
         self.mlp = MLP(dim_model, mlp_dim_mult)
 
     def forward(self, x: Tensor, attn_mask: Tensor) -> Tensor:
+        """
+        Applies the block.
+
+        Args:
+            x: features shaped [batch, seq, dim_model].
+            attn_mask: boolean attention mask, or None for full attention.
+
+        Returns:
+            the features with the same shape.
+        """
         x = x + self.attn(self.ln_1(x), attn_mask)
         x = x + self.mlp(self.ln_2(x))
         return x
 
 
 class MupGPT2(nn.Module):
-    """
-    GPT2 implementation following the original formulation to be able to load existing pre-trained weights
-
-    Args:
-        embedding_dim: embedding dimension for VM
-        nb_layers: number of transformer blocks
-        dim_heads: dimension of attention heads
-        vocabulary_size: total number of vector embeddings in GPT's codebook
-        nb_timesteps: maximum number of timesteps found in one sequence
-        nb_tokens_per_timestep: number of tokens ithi each timestep
-    """
+    """GPT2 over visual tokens, laid out to load the released pre-trained weights."""
 
     def __init__(
         self,
@@ -215,7 +256,22 @@ class MupGPT2(nn.Module):
         output_scale: float = 1.0,
         attn_scale: float = 1.0,
     ) -> None:
+        """
+        Creates and initializes the model.
 
+        Args:
+            embedding_dim: model width.
+            nb_layers: number of transformer blocks.
+            dim_heads: width of one attention head.
+            mlp_dim_mult: hidden width of the MLP as a multiple of the model width.
+            vocabulary_size: number of entries in the tokenizer codebook.
+            nb_timesteps: maximum number of frames in one sequence.
+            nb_tokens_per_timestep: number of tokens per frame.
+            init_std: standard deviation of the weight init.
+            output_tied: whether the readout shares the token embedding weights.
+            output_scale: input multiplier of the readout.
+            attn_scale: multiplier on the muP attention scale.
+        """
         super().__init__()
         assert vocabulary_size is not None, "vocabulary_size must be provided"
         assert nb_tokens_per_timestep is not None, "nb_tokens_per_timestep must be provided"
@@ -259,28 +315,20 @@ class MupGPT2(nn.Module):
         else:
             self.lm_head = MuReadout(embedding_dim, vocabulary_size, bias=False, output_mult=output_scale)
 
-        # init all weights
-        ################## /!\ IMPORTANT READ ##################
-        ### muP: swap constant std normal init with `normal_` from `mup.init`.
-        ### Because `_init_weights` is called in `__init__`, before `infshape` is set,
-        ### we need to manually call `self.apply(self._init_weights)` after calling
-        ### `set_base_shape(model, base)`
-        ###
-        ### for proper muP init
-        ### 1. instantiate model
-        ### 2. call set_base_shape(model, base_shape.bsh)
-        ### 3. reinit manually with model.apply(model._init_weights)
+        # This runs before set_base_shapes, so a proper muP init re-applies _init_weights after it.
         self.apply(self._init_weights)
 
-        # report number of parameters
         print("number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding: bool = True) -> int:
         """
-        Return the number of parameters in the model.
-        For non-embedding count (default), the position embeddings get subtracted.
-        The token embeddings would too, except due to the parameter sharing these
-        params are actually used as weights in the final layer, so we include them.
+        Counts the parameters; untied token embeddings are never counted.
+
+        Args:
+            non_embedding: whether to leave out the position embeddings.
+
+        Returns:
+            the number of parameters.
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
@@ -292,17 +340,11 @@ class MupGPT2(nn.Module):
 
     def _init_c_proj_residual(self, module: nn.Module) -> None:
         """
-        Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
+        Scales the init std of the residual output projections by 1/sqrt(2 * nb_layers), as in GPT-2.
 
-            > A modified initialization which accounts for the accumulation on the residual path with model depth. Scale
-            > the weights of residual layers at initialization by a factor of 1/√N where N is the # of residual layers.
-            >   -- GPT-2 :: https://openai.com/blog/better-language-models/
-
-        This is combined with the muP initilization that is scaling init_std by 1/sqrt(width).
-
-        Note: for the MLP c_proj, the scaling is 1/sqrt(width * mlp_hidden_mult)
+        Args:
+            module: attention or MLP module whose c_proj weights are re-initialized.
         """
-        # times 2 because in a block there are 2 residual paths, attn & mlp
         depth_std = self.init_std * (2 * self.nb_layers) ** -0.5
 
         for p_name, p in module.named_parameters():
@@ -314,38 +356,13 @@ class MupGPT2(nn.Module):
 
     def _init_weights(self, module: nn.Module) -> None:
         """
-        This function is called using model.apply(model._init_weights)
+        Initializes one module; model.apply visits children before parents, so a parent's rule overrides its layers' init.
 
-        This will apply `_init_weights` recursively to every submodule.
-        Children are seen first and then Parents.
-
-        Example with the model=MLP(), if we print every module seen it gives:
-
-            Linear(in_features=128, out_features=512, bias=False)
-            ------------------------------
-            GELU(approximate='none')
-            ------------------------------
-            Linear(in_features=512, out_features=128, bias=False)
-            ------------------------------
-            MLP(
-            (c_fc): Linear(in_features=128, out_features=512, bias=False)
-            (gelu): GELU(approximate='none')
-            (c_proj): Linear(in_features=512, out_features=128, bias=False)
-            )
-
-        This means that specific initialization to MLP using isinstance(module, MLP)
-        will override the initialization from isinstance(module, nn.Linear)
-
-        We use this fact apply specific initialization rules in some modules.
-        For example the init scaling of the MLP hidden nn.Linear layer is different
-        than other nn.Linear layers.
+        Args:
+            module: module to initialize.
         """
-
-        # MuReadout zero init
         if isinstance(module, MuReadout) and not self.output_tied:
-            # https://arxiv.org/abs/2404.05728 | 4.2.6 SP Unembedding Initialization
-            # A simple alternative to either initialization is a zeroinitialized unembedding projection [15],
-            # which we found to perform similarly to the µP initialization and to also facilitate transfer
+            # Zero-init readout, see https://arxiv.org/abs/2404.05728 section 4.2.6.
             module.weight.data.zero_()
 
         elif isinstance(module, nn.Linear):
@@ -370,17 +387,10 @@ class MupGPT2(nn.Module):
                 module.weight.data.fill_(1.0)
 
         elif isinstance(module, CausalSelfAttention):
-            ### muP query zero init
-            # yield equal attention weights over all past timesteps at initialization
-
-            # if attention uses nn.Linear fanout is first dim
-            # because nn.Linear applies y=xA.T+b
-            # if using Conv1D as in hugginfaces transformers, fanout is last dim
+            # muP zero-inits the query rows of c_attn so attention starts uniform.
             fanout, _ = module.c_attn.weight.shape
-            assert fanout % 3 == 0  # assert matrix is used for query, key and value
+            assert fanout % 3 == 0
 
-            # if attention uses, nn.Linear change init in first dim
-            # if using Conv1D, change init in last dim
             module.c_attn.weight.data[: fanout // 3, :] = 0
 
             self._init_c_proj_residual(module)
@@ -389,6 +399,17 @@ class MupGPT2(nn.Module):
             self._init_c_proj_residual(module)
 
     def _get_emb(self, token_sequence: Tensor, spatial_positions: Tensor, temporal_positions: Tensor) -> Tensor:
+        """
+        Sums the token, temporal and spatial embeddings.
+
+        Args:
+            token_sequence: token ids shaped [batch, seq].
+            spatial_positions: spatial position ids shaped [batch, seq].
+            temporal_positions: temporal position ids shaped [batch, seq].
+
+        Returns:
+            the embeddings shaped [batch, seq, embedding_dim].
+        """
         assert (
             spatial_positions.max() < self.nb_tokens_per_timestep
         ), f"spatial_positions.max()={spatial_positions.max()} >= self.nb_tokens_per_timestep={self.nb_tokens_per_timestep}"
@@ -396,7 +417,6 @@ class MupGPT2(nn.Module):
             temporal_positions.max() < self.nb_timesteps
         ), f"temporal_positions.max()={temporal_positions.max()} >= self.nb_timesteps={self.nb_timesteps}"
 
-        # compute spatio-temporal position embeddings
         spatial_pos_emb = self.transformer.wse(spatial_positions)
         temporal_pos_emb = self.transformer.wte(temporal_positions)
 
@@ -410,7 +430,16 @@ class MupGPT2(nn.Module):
         token_sequence: Tensor,
         stop_layer_idx: int,
     ) -> Tensor:
-        # cut the token_sequence to the maximum context size
+        """
+        Runs the causal transformer up to a given layer and returns its features per token.
+
+        Args:
+            token_sequence: token ids shaped [batch, frames, height, width].
+            stop_layer_idx: index of the last layer to run.
+
+        Returns:
+            the features shaped [batch, frames, height, width, embedding_dim].
+        """
         token_sequence = token_sequence[:, -self.block_size :]
         bs, context_timesteps, height, width = token_sequence.shape
         token_sequence = rearrange(token_sequence, "b t h w -> b (t h w)")
@@ -424,7 +453,6 @@ class MupGPT2(nn.Module):
         seqlen = token_sequence.size(1)
         attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 
-        # forward world embeddings to the transformer
         for layer_idx, block in enumerate(self.transformer.h):
             x = block(x, attn_mask)
             if layer_idx == len(self.transformer.h) - 1:
@@ -443,12 +471,17 @@ class MupGPT2(nn.Module):
         use_kv_cache: bool = False,
     ) -> Tensor:
         """
+        Predicts next-token logits for a flattened visual token sequence.
+
         Args:
-            token_sequence: A tensor of interleaved visual and action tokens.
-            spatial_positions: A tensor indicating the spatial position of each token in the sequence.
-                example: [0,1,2,3,0,1,2,3]
-            temporal_positions: A tensor indicating the temporal position of each token in the sequence.
-                example: [0,0,0,0,1,1,1,1]
+            token_sequence: token ids shaped [batch, seq].
+            spatial_positions: spatial position of each token, e.g. [0, 1, 2, 3, 0, 1, 2, 3].
+            temporal_positions: temporal position of each token, e.g. [0, 0, 0, 0, 1, 1, 1, 1].
+            inference: whether to return the logits of the last token only.
+            use_kv_cache: whether one new token is fed against the KV cache, without a mask.
+
+        Returns:
+            the logits shaped [batch, seq, vocabulary_size], or [batch, 1, vocabulary_size] at inference.
         """
         x = self._get_emb(token_sequence, spatial_positions, temporal_positions)
 
@@ -459,7 +492,6 @@ class MupGPT2(nn.Module):
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 
-        # forward world embeddings to the transformer
         for block in self.transformer.h:
             x = block(x, attn_mask)
         emb_out = self.transformer.ln_f(x)
@@ -467,19 +499,16 @@ class MupGPT2(nn.Module):
         if not inference:
             img_logits = self.lm_head(emb_out)
         else:
-            img_logits = self.lm_head(emb_out[:, [-1], :])  # note: using list [-1] to preserve the time dim
+            img_logits = self.lm_head(emb_out[:, [-1], :])  # the list index keeps the sequence dimension
 
         return img_logits
 
     def _setup_kv_cache(self, batch_size: int) -> None:
         """
-        Sets up key-value caching for transformer attention layers.
+        Attaches an empty KV cache sized to the maximum context to every attention layer.
 
-        KV Cache:
-        - Stores the Key and Value projections for each token
-        - Avoids recomputing these for previous tokens during generation
-        - Cache size matches max_context_size
-        - Must be reset when context is rolled
+        Args:
+            batch_size: number of samples.
         """
         for layer_idx, block in enumerate(self.transformer.h):
             layer = block.attn
@@ -495,38 +524,47 @@ class MupGPT2(nn.Module):
             layer.cache = cache
 
     def _reset_kv_cache(self) -> None:
-        """Reset the key-value cache."""
+        """Empties the KV cache of every layer."""
         for block in self.transformer.h:
             block.attn.cache.reset()
 
     def _clear_kv_cache(self) -> None:
-        """Clear the key-value cache."""
+        """Removes the KV cache from every layer."""
         for block in self.transformer.h:
             block.attn.cache = None
 
     def _sample_next_token(self, logits: Tensor, temperature: float, topk_sampler: int) -> Tensor:
         """
-        Sample the next token from the logits using top-k sampling.
+        Samples the next token from the last position's logits with top-k sampling.
 
         Args:
-            logits: The logits from the model.
-            temperature: The temperature for sampling.
-            topk_sampler: The number of top-k tokens to sample from.
+            logits: logits shaped [batch, seq, vocabulary_size].
+            temperature: sampling temperature.
+            topk_sampler: number of most likely tokens to sample from.
 
         Returns:
-            The sampled tokens
+            the sampled token ids shaped [batch, 1].
         """
         logits = logits[:, -1, :] / temperature
         tokens_probs = torch.softmax(logits, dim=-1)
         topk_probs, topk_tokens = torch.topk(tokens_probs, topk_sampler, dim=-1, sorted=False)
         topk_renormalized_probs = topk_probs / topk_probs.sum(dim=-1, keepdim=True)
-        # Sample from the top k normalized probabilities
         next_token_idx = torch.multinomial(topk_renormalized_probs, num_samples=1)
         next_token = torch.gather(topk_tokens, -1, next_token_idx)
         return next_token
 
     def _process_generated_frame(self, context: Tensor, height: int, width: int) -> Tensor:
-        """Extract and process the latest generated frame."""
+        """
+        Extracts the last generated frame from the context as a token grid.
+
+        Args:
+            context: flattened token ids shaped [batch, seq].
+            height: height of a token frame.
+            width: width of a token frame.
+
+        Returns:
+            the last frame shaped [batch, height, width].
+        """
         frame = context[:, -self.nb_tokens_per_timestep :]
         frame = rearrange(frame, "b (h w) -> b h w", h=height, w=width)
         return frame
@@ -541,18 +579,31 @@ class MupGPT2(nn.Module):
         use_kv_cache: bool = True,
         verbose: int | bool = 0,
     ) -> Tensor:
+        """
+        Generates future token frames autoregressively, one token at a time.
+
+        Args:
+            number_of_future_frames: number of frames to generate.
+            burnin_visual_tokens: context token ids shaped [batch, frames, height, width].
+            temperature: sampling temperature.
+            topk_sampler: number of most likely tokens to sample from.
+            use_kv_cache: whether to cache keys and values between tokens.
+            verbose: 1 shows a progress bar per frame, 2 also one per token.
+
+        Returns:
+            the generated frames shaped [batch, number_of_future_frames, height, width].
+        """
         verbose = int(verbose)
 
         bs, _, height, width = burnin_visual_tokens.shape
         context = rearrange(burnin_visual_tokens, "b t h w -> b (t h w)")
 
         def _count_nb_frames(context: Tensor) -> int:
+            """Counts the frames in a flattened token context."""
             return context.size(1) // (height * width)
 
-        # we get positions for the max context size we are allowed
         positions = compute_position_indices(bs, self.nb_timesteps, height, width)
 
-        # cut the context to the maximum context size
         context = context[:, -self.block_size :]
         spatial_positions = positions["spatial_positions"]
         temporal_positions = positions["temporal_positions"]
@@ -569,12 +620,10 @@ class MupGPT2(nn.Module):
             range(number_of_future_frames), f"Generating {number_of_future_frames} frames", disable=verbose < 1,
         ):
 
-            # We should always have at most self.nb_timesteps - 1 frames in the context
-            # to leave space for the generated frame
+            # The context keeps at most nb_timesteps - 1 frames to leave room for the generated one.
             if _count_nb_frames(context) > self.nb_timesteps - 1:
                 context = context[:, -((self.nb_timesteps - 1) * self.nb_tokens_per_timestep) :]
-                # because we use learned positional embeddings, we can not keep the context
-                # in cache and simply roll it. We need to recompute the whole cache.
+                # Learned position embeddings rule out rolling the cache, so it is recomputed.
                 if use_kv_cache:
                     self._reset_kv_cache()
                     kv_cache_was_reset = True
@@ -586,7 +635,6 @@ class MupGPT2(nn.Module):
                 leave=False,
                 position=1,
             ):
-                # Get next token
                 tokens_in_context = context.size(1)
                 tmp_ctx = context
                 tmp_spatial_positions = spatial_positions[:, :tokens_in_context]
@@ -615,8 +663,19 @@ class MupGPT2(nn.Module):
 
 
 def load_pretrained_gpt(checkpoint_path: str, device: torch.device | str = "cuda", tempdir: Optional[str] = None) -> MupGPT2:
+    """
+    Loads a frozen MupGPT2 in eval mode from a Lightning or DeepSpeed checkpoint.
+
+    Args:
+        checkpoint_path: checkpoint file, or a DeepSpeed checkpoint directory.
+        device: device to move the model to.
+        tempdir: parent directory for the temporary fused DeepSpeed checkpoint.
+
+    Returns:
+        the loaded model.
+    """
     if os.path.isdir(checkpoint_path):
-        # This is a deepspeed checkpoint
+        # A directory is a DeepSpeed checkpoint.
         import tempfile
 
         from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict

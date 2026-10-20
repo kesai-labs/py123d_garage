@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 KE:SAI
+
 const fs = require("fs");
 const { spawn } = require("child_process");
 

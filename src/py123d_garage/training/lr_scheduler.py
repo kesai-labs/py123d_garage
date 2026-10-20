@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
 """Learning-rate schedule for training: cosine warm restarts with a per-cycle warmup ramp."""
 
 from __future__ import annotations
@@ -9,14 +13,32 @@ from torch.optim.lr_scheduler import LRScheduler
 from typing_extensions import override
 
 
+def cycle_end_epochs(max_epochs: int, T_mult: int, first_cycle_epochs: int = 1) -> list[int]:
+    """
+    The last epoch of every cycle that completes within max_epochs.
+
+    Args:
+        max_epochs: Epochs the training runs for.
+        T_mult: Factor each cycle's length grows by; 2 gives 0, 2, 6, 14, ... for a one-epoch first cycle.
+        first_cycle_epochs: Epochs of the first cycle.
+
+    Returns:
+        the epochs, ascending.
+    """
+    epochs: list[int] = []
+    start, length = 0, first_cycle_epochs
+    while start + length <= max_epochs:
+        epochs.append(start + length - 1)
+        start += length
+        length *= T_mult
+    return epochs
+
+
 class CosineAnnealingWarmRestartsWithWarmup(LRScheduler):
     """
-    Cosine annealing with warm restarts whose cycles open with a linear ramp.
+    Cosine annealing with warm restarts whose cycles open with a linear warmup ramp.
 
-    Cycle ``i`` runs for ``T_0 * T_mult**i`` steps: its first
-    ``warmup_fraction`` of steps ramp linearly to the base learning rate and the
-    rest anneal to ``eta_min``. A zero fraction is plain
-    :class:`~torch.optim.lr_scheduler.CosineAnnealingWarmRestarts`.
+    Cycle ``i`` runs for ``T_0 * T_mult**i`` steps; a zero warmup_fraction gives plain CosineAnnealingWarmRestarts.
     """
 
     def __init__(
@@ -56,7 +78,7 @@ class CosineAnnealingWarmRestartsWithWarmup(LRScheduler):
         self.eta_min = eta_min
         super().__init__(optimizer, last_epoch)
 
-    def _cycle_position(self) -> tuple[int, int]:
+    def cycle_position(self) -> tuple[int, int]:
         """
         Locate the current step within its cycle.
 
@@ -73,8 +95,8 @@ class CosineAnnealingWarmRestartsWithWarmup(LRScheduler):
     # Torch's stubs disagree on get_lr's return type across supported versions.
     @override
     def get_lr(self) -> list[float]:  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Inherited, see superclass."""
-        length, step = self._cycle_position()
+        """Compute each parameter group's learning rate at the current step."""
+        length, step = self.cycle_position()
         warmup_steps = int(length * self.warmup_fraction)
         if step < warmup_steps:
             scale = (step + 1) / (warmup_steps + 1)

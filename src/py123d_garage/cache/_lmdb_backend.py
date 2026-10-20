@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
+"""LMDB storage of a cache store, one environment per log."""
+
 from __future__ import annotations
 
 import logging
@@ -129,10 +135,10 @@ class LmdbCacheWriter:
 
     def _commit(self, items: list[tuple[bytes, bytes]]) -> None:
         """
-        Write items in one transaction, doubling the map whenever it overflows.
+        Write records in one transaction, doubling the map size whenever it overflows.
 
-        set_mapsize requires no open transaction; the context manager aborts the failed
-        one first.
+        Args:
+            items: the (key, encoded record) pairs to write
         """
         assert self._env is not None
         while True:
@@ -148,6 +154,7 @@ class LmdbCacheWriter:
                 LOG.info(
                     f"{self._log_dir.name}: growing lmdb map to {self._map_size / (1 << 30):.1f} GiB",
                 )
+                # set_mapsize needs no open transaction; the with block already aborted the failed one.
                 self._env.set_mapsize(self._map_size)
 
     def flush(self) -> None:
@@ -167,7 +174,19 @@ class LmdbCacheWriter:
         self._env = None
 
     def __enter__(self) -> LmdbCacheWriter:
+        """
+        Use the writer as a context manager that closes it on exit.
+
+        Returns:
+            this writer
+        """
         return self
 
     def __exit__(self, *exc_info: object) -> None:
+        """
+        Close the writer, flushing pending records.
+
+        Args:
+            *exc_info: the exception type, value and traceback, ignored
+        """
         self.close()

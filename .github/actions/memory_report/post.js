@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 KE:SAI
+
 const fs = require("fs");
 
 const read = (file) => (fs.existsSync(file) ? fs.readFileSync(file, "utf8").trim() : "");

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 650" width="1600" height="650">
+  <defs>
+    <marker id="mg" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#9a9a9a" />
+    </marker>
+    <marker id="mo" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#e5a300" />
+    </marker>
+    <marker id="mb" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#141414" />
+    </marker>
+  </defs>
+  <rect x="0.0" y="0.0" width="1600.0" height="650.0" rx="24" fill="#f5f3ee" stroke="none" stroke-width="0" />
+  <rect x="40.0" y="40.0" width="740.0" height="550.0" rx="18" fill="#efebe3" stroke="none" stroke-width="0" />
+  <text x="76.0" y="88.0" font-family="'Space Grotesk','IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#141414" text-anchor="start">Base: hybrid CNN/ViT</text>
+  <text x="76.0" y="118.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#555555" text-anchor="start">Attention adds back into both branches</text>
+  <text x="200.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Input</text>
+  <text x="312.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 1</text>
+  <text x="432.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 2</text>
+  <text x="552.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 3</text>
+  <text x="672.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 4</text>
+  <rect x="158.0" y="165.0" width="84.0" height="64.0" rx="6" fill="#f2f2f2" stroke="none" stroke-width="0" />
+  <path d="M164.0 165.0 H236.0 Q242.0 165.0 242.0 171.0 V197.0 H158.0 V171.0 Q158.0 165.0 164.0 165.0 Z" fill="#e3e3e3" />
+  <rect x="158.0" y="165.0" width="84.0" height="64.0" rx="6" fill="none" stroke="#9a9a9a" stroke-width="2" />
+  <path d="M158.0 197.0 H242.0" stroke="#9a9a9a" stroke-width="1.5" stroke-dasharray="4 4" />
+  <text x="200.0" y="186.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#141414" text-anchor="middle">t − 1 s</text>
+  <text x="200.0" y="218.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#141414" text-anchor="middle">t</text>
+  <path d="M150.0 167.0 L144.0 167.0 L144.0 227.0 L150.0 227.0" fill="none" stroke="#141414" stroke-width="2.5" stroke-linecap="round" />
+  <text x="136.0" y="193.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="400" fill="#555555" text-anchor="end">one</text>
+  <text x="136.0" y="211.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="400" fill="#555555" text-anchor="end">image</text>
+  <path d="M247.0 197.0 L256.0 197.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="266.0" y="165.0" width="92.0" height="64.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <path d="M362.0 197.0 L377.0 197.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="386.0" y="165.0" width="92.0" height="64.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <path d="M482.0 197.0 L497.0 197.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="506.0" y="165.0" width="92.0" height="64.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <path d="M602.0 197.0 L617.0 197.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="626.0" y="165.0" width="92.0" height="64.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <text x="76.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#141414" text-anchor="start">Fusion</text>
+  <text x="76.0" y="419.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#141414" text-anchor="start">BEV</text>
+  <rect x="266.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="312.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="266.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M362.0 413.0 L377.0 413.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M298.0 235.0 L298.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M326.0 279.0 L326.0 239.0" fill="none" stroke="#e5a300" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mo)" />
+  <path d="M298.0 379.0 L298.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M326.0 335.0 L326.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <rect x="386.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="432.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="386.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M482.0 413.0 L497.0 413.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M418.0 235.0 L418.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M446.0 279.0 L446.0 239.0" fill="none" stroke="#e5a300" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mo)" />
+  <path d="M418.0 379.0 L418.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M446.0 335.0 L446.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <rect x="506.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="552.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="506.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M602.0 413.0 L617.0 413.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M538.0 235.0 L538.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M566.0 279.0 L566.0 239.0" fill="none" stroke="#e5a300" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mo)" />
+  <path d="M538.0 379.0 L538.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M566.0 335.0 L566.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <rect x="626.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="672.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="626.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M658.0 235.0 L658.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M686.0 279.0 L686.0 239.0" fill="none" stroke="#e5a300" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mo)" />
+  <path d="M658.0 379.0 L658.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M686.0 335.0 L686.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <text x="76.0" y="496.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#555555" text-anchor="start">Frames and views interact through attention at every stage,</text>
+  <text x="76.0" y="524.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#555555" text-anchor="start">but the stacked image is re-encoded at every step.</text>
+  <rect x="820.0" y="40.0" width="740.0" height="550.0" rx="18" fill="#efebe3" stroke="none" stroke-width="0" />
+  <text x="856.0" y="88.0" font-family="'Space Grotesk','IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#141414" text-anchor="start">Streaming: CNN + camera-to-BEV transformer</text>
+  <text x="856.0" y="118.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#555555" text-anchor="start">Attention adds back into the BEV only</text>
+  <text x="980.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Input</text>
+  <text x="1092.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 1</text>
+  <text x="1212.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 2</text>
+  <text x="1332.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 3</text>
+  <text x="1452.0" y="154.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="16" font-weight="400" fill="#555555" text-anchor="middle">Stage 4</text>
+  <rect x="938.0" y="165.0" width="84.0" height="29.0" rx="6" fill="#f5f3ee" stroke="#9a9a9a" stroke-width="2" stroke-dasharray="6 5" />
+  <text x="980.0" y="185.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#141414" text-anchor="middle">t − 1 s</text>
+  <rect x="938.0" y="200.0" width="84.0" height="29.0" rx="6" fill="#f2f2f2" stroke="#9a9a9a" stroke-width="2" />
+  <text x="980.0" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#141414" text-anchor="middle">t</text>
+  <path d="M1027.0 214.5 L1036.0 214.5" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="1046.0" y="165.0" width="92.0" height="29.0" rx="8" fill="#f5f3ee" stroke="#e5a300" stroke-width="2.5" stroke-dasharray="7 6" />
+  <text x="1092.0" y="185.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" fill="#9a9a9a" text-anchor="middle">from cache</text>
+  <rect x="1166.0" y="165.0" width="92.0" height="29.0" rx="8" fill="#f5f3ee" stroke="#e5a300" stroke-width="2.5" stroke-dasharray="7 6" />
+  <text x="1212.0" y="185.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" fill="#9a9a9a" text-anchor="middle">from cache</text>
+  <rect x="1286.0" y="165.0" width="92.0" height="29.0" rx="8" fill="#f5f3ee" stroke="#e5a300" stroke-width="2.5" stroke-dasharray="7 6" />
+  <text x="1332.0" y="185.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" fill="#9a9a9a" text-anchor="middle">from cache</text>
+  <rect x="1406.0" y="165.0" width="92.0" height="29.0" rx="8" fill="#f5f3ee" stroke="#e5a300" stroke-width="2.5" stroke-dasharray="7 6" />
+  <text x="1452.0" y="185.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="400" fill="#9a9a9a" text-anchor="middle">from cache</text>
+  <rect x="1046.0" y="200.0" width="92.0" height="29.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <text x="1092.0" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#8a5d00" text-anchor="middle">computed</text>
+  <path d="M1142.0 214.5 L1157.0 214.5" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="1166.0" y="200.0" width="92.0" height="29.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <text x="1212.0" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#8a5d00" text-anchor="middle">computed</text>
+  <path d="M1262.0 214.5 L1277.0 214.5" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="1286.0" y="200.0" width="92.0" height="29.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <text x="1332.0" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#8a5d00" text-anchor="middle">computed</text>
+  <path d="M1382.0 214.5 L1397.0 214.5" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <rect x="1406.0" y="200.0" width="92.0" height="29.0" rx="8" fill="#ffecb8" stroke="#e5a300" stroke-width="2.5" />
+  <text x="1452.0" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" font-weight="600" fill="#8a5d00" text-anchor="middle">computed</text>
+  <text x="856.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#141414" text-anchor="start">Fusion</text>
+  <text x="856.0" y="419.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="600" fill="#141414" text-anchor="start">BEV</text>
+  <rect x="1046.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="1092.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="1046.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M1142.0 413.0 L1157.0 413.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1078.0 235.0 L1078.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1078.0 379.0 L1078.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1106.0 335.0 L1106.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <rect x="1166.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="1212.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="1166.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M1262.0 413.0 L1277.0 413.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1198.0 235.0 L1198.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1198.0 379.0 L1198.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1226.0 335.0 L1226.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <rect x="1286.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="1332.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="1286.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M1382.0 413.0 L1397.0 413.0" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1318.0 235.0 L1318.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1318.0 379.0 L1318.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1346.0 335.0 L1346.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <rect x="1406.0" y="285.0" width="92.0" height="44.0" rx="8" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="1452.0" y="313.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Attention</text>
+  <rect x="1406.0" y="385.0" width="92.0" height="56.0" rx="8" fill="#e8e8e8" stroke="#5c5c5c" stroke-width="2.5" />
+  <path d="M1438.0 235.0 L1438.0 275.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1438.0 379.0 L1438.0 339.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <path d="M1466.0 335.0 L1466.0 375.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <text x="856.0" y="496.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#555555" text-anchor="start">Frames meet only in the BEV: the transformer just lifts camera</text>
+  <text x="856.0" y="524.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="400" fill="#555555" text-anchor="start">features into the ego frame. Each frame is encoded once.</text>
+  <path d="M40.0 621.0 L80.0 621.0" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mg)" />
+  <text x="96.0" y="627.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#555555" text-anchor="start">Read</text>
+  <path d="M210.0 621.0 L250.0 621.0" fill="none" stroke="#e5a300" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mo)" />
+  <text x="266.0" y="627.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#555555" text-anchor="start">Add back into the image branch</text>
+  <path d="M640.0 621.0 L680.0 621.0" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" marker-end="url(#mb)" />
+  <text x="696.0" y="627.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#555555" text-anchor="start">Add back into the BEV branch</text>
+</svg>

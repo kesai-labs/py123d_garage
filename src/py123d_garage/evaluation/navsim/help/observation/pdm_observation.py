@@ -31,7 +31,7 @@ from py123d_garage.evaluation.navsim.help.trajectory_grid import TrajectoryGrid
 
 
 class PDMObservation:
-    """PDM's observation class for forecasted occupancy maps."""
+    """Occupancy maps of objects and red lights over the future time steps."""
 
     def __init__(
         self,
@@ -42,20 +42,20 @@ class PDMObservation:
         extend_observation_for_ttc: bool = True,
     ):
         """
-        Constructor of PDMObservation.
+        Sets up an empty observation.
 
         Args:
-            trajectory_grid: Sampling parameters for final trajectory
-            proposal_grid: Sampling parameters for proposals
-            map_radius: radius around ego to consider, defaults to 50
-            observation_sample_res: sample resolution of forecast, defaults to 2
-            extend_observation_for_ttc: extend observation for TTC metric, defaults to True
+            trajectory_grid: Grid of the final trajectory.
+            proposal_grid: Grid of the proposals.
+            map_radius: [m] Radius around ego of the observed objects, or None for no limit.
+            observation_sample_res: Number of time steps per occupancy map.
+            extend_observation_for_ttc: Whether to cover 1 s past the proposal horizon for the TTC metric.
         """
         assert trajectory_grid.interval_us == proposal_grid.interval_us, (
             "PDMObservation: Proposals and Trajectory must have equal interval length!"
         )
 
-        # observation needs length of trajectory horizon or proposal horizon +1s (for TTC metric)
+        # The observation covers the trajectory horizon, or the proposal horizon plus 1 s for TTC.
         self._sample_interval: float = trajectory_grid.interval_s
 
         if extend_observation_for_ttc:
@@ -72,26 +72,25 @@ class PDMObservation:
         self._map_radius: float | None = map_radius
         self._observation_sample_res: int = observation_sample_res
 
-        # useful things
         self._global_to_local_idcs = [
             idx // observation_sample_res for idx in range(self._observation_samples + observation_sample_res)
         ]
         self._collided_track_ids: list[str] = []
         self._red_light_token = "red_light"
 
-        # lazy loaded (during update)
+        # Set by update() or update_replay().
         self._occupancy_maps: list[OccupancyMap2D] = []
         self._unique_objects: dict[str, BoxDetectionSE2] | None = None
 
     def __getitem__(self, time_idx: int) -> OccupancyMap2D:
         """
-        Retrieves the occupancy map for time_idx, adapting the temporal resolution.
+        Retrieves the occupancy map of a time step.
 
         Args:
-            time_idx: index for future simulation iterations [10Hz]
+            time_idx: Index of the future time step.
 
         Returns:
-            occupancy map
+            The occupancy map covering that time step.
         """
         assert len(self._occupancy_maps) > 0, "PDMObservation: Has not been updated yet!"
         assert 0 <= time_idx < len(self._global_to_local_idcs), f"PDMObservation: index {time_idx} out of range!"
@@ -101,24 +100,44 @@ class PDMObservation:
 
     @property
     def collided_track_ids(self) -> list[str]:
-        """Track tokens of objects ego has already collided with."""
+        """
+        The objects ego has already collided with.
+
+        Returns:
+            Their track tokens.
+        """
         assert self._initialized, "PDMObservation: Has not been updated yet!"
         return self._collided_track_ids
 
     @property
     def red_light_token(self) -> str:
-        """Token prefix used to identify red-light occupancy entries."""
+        """
+        The token prefix of red light occupancy entries.
+
+        Returns:
+            The prefix.
+        """
         return self._red_light_token
 
     @property
     def unique_objects(self) -> dict[str, BoxDetectionSE2]:
-        """Mapping from track token to the tracked object."""
+        """
+        The observed objects.
+
+        Returns:
+            Every observed object, keyed by track token.
+        """
         assert self._unique_objects is not None, "PDMObservation: Has not been updated yet!"
         return self._unique_objects
 
     @property
     def box_detections_se2(self) -> BoxDetectionsSE2:
-        """Box detections from the most recent update."""
+        """
+        The box detections of the most recent update.
+
+        Returns:
+            The box detections.
+        """
         assert self._initialized, "PDMObservation: Has not been updated yet!"
         return self._box_detections_se2
 
@@ -130,15 +149,14 @@ class PDMObservation:
         route_lane_dict: dict[int, Lane],
     ) -> None:
         """
-        Forecasts object occupancy and lazily updates the PDMObservation state.
+        Forecasts the occupancy maps from the current detections with constant velocities.
 
         Args:
-            ego_state_se2: state of ego vehicle
-            box_detections_se2: input box detections
-            traffic_light_detections: list of traffic light states
-            route_lane_dict: dictionary of on-route lanes
+            ego_state_se2: Current ego state.
+            box_detections_se2: Current box detections.
+            traffic_light_detections: Current traffic light states, or None if unknown.
+            route_lane_dict: On-route lanes, keyed by ID.
         """
-
         if traffic_light_detections is None:
             traffic_light_detections = TrafficLightDetections(
                 [],
@@ -223,7 +241,7 @@ class PDMObservation:
             )
             self._occupancy_maps.append(occupancy_map)
 
-        # save collided objects to ignore in the future
+        # Objects ego already overlaps are ignored from now on.
         ego_polygon: Polygon = ego_state_se2.bounding_box_se2.shapely_polygon
         # The occupancy maps built above are keyed by string track tokens.
         intersecting_obstacles = cast(
@@ -248,13 +266,10 @@ class PDMObservation:
 
     def update_replay(self, scene_api: SceneAPI) -> None:
         """
-        Builds occupancy maps directly from logged future detections (privileged replay).
-
-        Unlike :func:`update`, this reads ground-truth box detections at each future iteration
-        instead of forecasting object motion from the current frame.
+        Builds the occupancy maps from the logged future box detections instead of a forecast.
 
         Args:
-            scene_api: API providing access to logged future box detections.
+            scene_api: Scene holding the logged future box detections.
         """
         occupancy_maps: list[OccupancyMap2D] = []
         unique_objects: dict[str, BoxDetectionSE2] = {}
@@ -285,8 +300,7 @@ class PDMObservation:
         assert len(occupancy_maps) > 0, "PDMObservation: Replay update produced no occupancy maps."
 
         if len(occupancy_maps) < self._observation_samples + 1:
-            # Some scenes provide a shorter logged future horizon than required by PDM scoring.
-            # Reuse the last available occupancy map for the remaining horizon.
+            # A log shorter than the scoring horizon repeats its last occupancy map.
             last_map = occupancy_maps[-1]
             occupancy_maps.extend(
                 [last_map] * (self._observation_samples + 1 - len(occupancy_maps)),
@@ -303,16 +317,14 @@ class PDMObservation:
         box_detections_se2: BoxDetectionsSE2,
     ) -> PDMObjectManager:
         """
-        Creates an object manager populated with the valid tracked objects.
-
-        Objects beyond the map radius or already collided with are skipped.
+        Creates an object manager holding the objects within the map radius not yet collided with.
 
         Args:
-            ego_state_se2: state of ego-vehicle of initial step
-            box_detections_se2: input box detections of initial step
+            ego_state_se2: Current ego state.
+            box_detections_se2: Current box detections.
 
         Returns:
-            PDMObjectManager class
+            The filled object manager.
         """
         object_manager = PDMObjectManager()
 
@@ -338,11 +350,11 @@ class PDMObservation:
         Collects red traffic lights along ego's route.
 
         Args:
-            traffic_light_detections: wrapper class for traffic light detections in 123D.
-            route_lane_dict: dictionary of on-route lanes
+            traffic_light_detections: Current traffic light states.
+            route_lane_dict: On-route lanes, keyed by ID.
 
         Returns:
-            tuple of tokens and polygons of red traffic lights
+            The tokens and lane polygons of the red lights.
         """
         traffic_light_tokens: list[str] = []
         traffic_light_polygons: list[Polygon] = []

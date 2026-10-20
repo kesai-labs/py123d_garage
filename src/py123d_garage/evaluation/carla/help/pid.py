@@ -1,8 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+# Adapted from kesai-labs/lead (MIT License).
+
 from __future__ import annotations
 
 import math
 from collections import deque
 
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 
@@ -51,12 +56,7 @@ class PIDController:
 
 
 class WaypointFollower:
-    """
-    Follows predicted spatio-temporal waypoints with PID controllers.
-
-    The waypoint spacing encodes the desired speed; steering aims at the first
-    waypoint beyond a speed regime dependent aim distance.
-    """
+    """Follows predicted waypoints with PID controllers, reading the desired speed from their spacing."""
 
     def __init__(
         self,
@@ -116,14 +116,14 @@ class WaypointFollower:
 
     def step(
         self,
-        waypoints: npt.NDArray[np.float64],
+        waypoints: jt.Float64[npt.NDArray[np.float64], "num_waypoints 2"],
         speed: float,
     ) -> tuple[float, float, float]:
         """
         Computes vehicle controls from the predicted waypoints.
 
         Args:
-            waypoints: predicted future waypoints in the ego frame, shape (n, 2).
+            waypoints: predicted future waypoints in the ego frame.
             speed: current ego speed in m/s.
 
         Returns:

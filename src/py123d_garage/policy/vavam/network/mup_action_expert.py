@@ -2,13 +2,7 @@
 # Copyright (c) 2025 Valeo
 # Adapted from valeoai/VideoActionModel (MIT License).
 
-"""
-mup:
-LayerNorm elementwise_affine=False  (see https://arxiv.org/abs/2404.05728)
-MuReadout
-MuSharedReadout
-normal_ init
-"""
+"""muP action expert: a transformer that denoises action sequences, built from affine-free LayerNorms and a MuReadout."""
 
 import math
 
@@ -20,11 +14,15 @@ from torch import Tensor
 
 
 class SinusoidalPosEmb(nn.Module):
-    """
-    Sinusoidal positional embedding the diffusion step.
-    """
+    """Sinusoidal embedding of the diffusion step."""
 
     def __init__(self, dim: int) -> None:
+        """
+        Stores the embedding width.
+
+        Args:
+            dim: embedding width.
+        """
         super().__init__()
         self.dim = dim
 
@@ -33,6 +31,16 @@ class SinusoidalPosEmb(nn.Module):
         t: Tensor,
         max_period: float = 10000.0,
     ) -> Tensor:
+        """
+        Embeds the diffusion steps.
+
+        Args:
+            t: diffusion steps shaped [n].
+            max_period: longest sinusoid period.
+
+        Returns:
+            the embeddings shaped [n, dim].
+        """
         half_dim = self.dim // 2
         emb = math.log(max_period) / (half_dim - 1)
         emb = torch.exp(torch.arange(half_dim, device=t.device) * -emb).to(dtype=t.dtype)
@@ -42,25 +50,7 @@ class SinusoidalPosEmb(nn.Module):
 
 
 class ActionEncoder(nn.Module):
-    """
-    Embedding for actions.
-
-    - Encodes the noisy actions
-    - Embeds the high level command
-    - Add positional embedding for the action horizon
-
-    - Combines it with the diffusion step temporal embedding
-
-    Parameters
-    ----------
-    action_dim: int, dimension of the action space
-    action_hidden_dim: int, dimension of the action embedding and width of the denoiser
-    action_horizon: int, number of timesteps in the action sequence,
-                         not the same as the context length of the video prediction model.
-    number_high_level_command: int, number of high level commands in the nuScenes / nuPlan dataset
-    max_period: float, maximum period for the sinusoidal positional embedding
-    bias: bool, whether to use bias in the linear layers
-    """
+    """Embeds noisy actions with the high-level command, the horizon position and the diffusion step."""
 
     def __init__(
         self,
@@ -71,6 +61,17 @@ class ActionEncoder(nn.Module):
         max_period: float = 10000.0,
         bias: bool = False,
     ) -> None:
+        """
+        Creates the encoder layers.
+
+        Args:
+            action_dim: width of one action.
+            action_hidden_dim: width of the action embedding and of the denoiser.
+            action_horizon: number of actions per sequence, unrelated to the video context length.
+            number_high_level_command: number of high-level commands.
+            max_period: longest period of the diffusion step embedding.
+            bias: whether the linear layers have a bias.
+        """
         super().__init__()
         self.action_dim = action_dim
         self.action_horizon = action_horizon
@@ -78,7 +79,7 @@ class ActionEncoder(nn.Module):
 
         self.linear_1 = nn.Linear(action_dim, action_hidden_dim, bias=bias)
         self.linear_2 = nn.Linear(2 * action_hidden_dim, action_hidden_dim, bias=bias)
-        self.nonlinearity = nn.SiLU()  # swish
+        self.nonlinearity = nn.SiLU()
         self.linear_3 = nn.Linear(action_hidden_dim, action_hidden_dim, bias=bias)
 
         self.command_embedding = nn.Embedding(number_high_level_command, action_hidden_dim)
@@ -93,46 +94,67 @@ class ActionEncoder(nn.Module):
         high_level_command: Tensor,
         diffusion_step: Tensor,
     ) -> Tensor:
-        # actions: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
-        # high_level_command: [Batch_Size, context_length]
-        # diffusion_step: [Batch_Size, context_length]
+        """
+        Embeds the actions.
+
+        Args:
+            actions: noisy actions shaped [batch, context, horizon, action_dim].
+            high_level_command: command ids shaped [batch, context].
+            diffusion_step: diffusion steps shaped [batch, context].
+
+        Returns:
+            the embeddings shaped [batch, context, horizon, action_hidden_dim].
+        """
         bs, context_length, horizon, _ = actions.size()
 
-        action_emb = self.linear_1(actions)  # [Batch_Size, context_length, Horizon_Steps, Action_Hidden_Dim]
-        # embedd high level command
-        command_emb = self.command_embedding(high_level_command)  # [Batch_Size, context_length, Action_Hidden_Dim]
+        action_emb = self.linear_1(actions)
+        command_emb = self.command_embedding(high_level_command)
         command_emb = repeat(command_emb, "b t d -> b t h d", h=horizon)
-        # Pos embedding for actions
         action_pos_emb = self.action_positional_embedding(
             torch.arange(horizon, device=actions.device),
-        )  # [Horizon_Steps, Action_Hidden_Dim]
+        )
         action_pos_emb = repeat(action_pos_emb, "h d -> b t h d", b=bs, t=context_length)
-        # Final timstep action embedding
         action_emb = action_emb + command_emb + action_pos_emb
 
-        # Pos embedding for diffusion step
         diffusion_step = rearrange(diffusion_step, "b t -> (b t)")
         diffusion_step_emb = self.diffusion_step_embedding(
             diffusion_step, self.max_period,
-        )  # [Batch_Size, context_length, Action_Hidden_Dim]
+        )
         diffusion_step_emb = rearrange(diffusion_step_emb, "(b t) d -> b t d", b=bs)
         diffusion_step_emb = repeat(diffusion_step_emb, "b t d -> b t h d", h=horizon).type_as(action_emb)
 
         action_emb = torch.cat([diffusion_step_emb, action_emb], dim=-1)
         action_emb = self.nonlinearity(self.linear_2(action_emb))
         action_emb = self.linear_3(action_emb)
-        return action_emb  # [Batch_Size, timesteps, Horizon_Steps, Action_Hidden_Dim]
+        return action_emb
 
 
 class MLP(nn.Module):
+    """Feed-forward layer of a transformer block."""
 
     def __init__(self, dim_model: int, hidden_dim_mult: int = 4) -> None:
+        """
+        Creates the two projections.
+
+        Args:
+            dim_model: model width.
+            hidden_dim_mult: hidden width as a multiple of the model width.
+        """
         super().__init__()
         self.c_fc = nn.Linear(dim_model, hidden_dim_mult * dim_model, bias=False)
         self.gelu = nn.GELU()
         self.c_proj = nn.Linear(hidden_dim_mult * dim_model, dim_model, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
+        """
+        Applies the feed-forward layer.
+
+        Args:
+            x: features shaped [batch, seq, dim_model].
+
+        Returns:
+            the features with the same shape.
+        """
         x = self.c_fc(x)
         x = self.gelu(x)
         x = self.c_proj(x)
@@ -140,8 +162,18 @@ class MLP(nn.Module):
 
 
 class SelfAttention(nn.Module):
+    """Bidirectional multi-head self-attention with muP scaling."""
 
     def __init__(self, dim_model: int, attn_dim: int, dim_heads: int, attn_scale: float) -> None:
+        """
+        Creates the projections.
+
+        Args:
+            dim_model: model width.
+            attn_dim: total width of the attention heads.
+            dim_heads: width of one attention head.
+            attn_scale: multiplier on the muP attention scale.
+        """
         super().__init__()
         assert attn_dim % dim_heads == 0, "dim_model must be divisible by dim_heads"
 
@@ -149,52 +181,55 @@ class SelfAttention(nn.Module):
         self.dim_model = dim_model
         self.attn_dim = attn_dim
 
-        ########### muP ###########
         self.attn_scale = attn_scale
-        self.attn_score = nn.Identity()  # just for coordcheck
-        self.query = nn.Identity()  # just for coordcheck
-        self.key = nn.Identity()  # just for coordcheck
-        self.value = nn.Identity()  # just for coordcheck
+        # Identity hooks for muP coordinate checks.
+        self.attn_score = nn.Identity()
+        self.query = nn.Identity()
+        self.key = nn.Identity()
+        self.value = nn.Identity()
 
-        # key, query, value projections for all heads, but in a batch
         self.c_attn = nn.Linear(dim_model, 3 * self.attn_dim, bias=False)
 
-        # output projection
         self.c_proj = nn.Linear(self.attn_dim, dim_model, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
-        # calculate query, key, values for all heads in batch
+        """
+        Applies self-attention over the whole sequence.
+
+        Args:
+            x: features shaped [batch, seq, dim_model].
+
+        Returns:
+            the attended features with the same shape.
+        """
         x = self.c_attn(x)
 
-        # split into qkv and heads
         q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
 
-        ### muP: just for coord check (debug)
         q = self.query(q)
         k = self.key(k)
         v = self.value(v)
 
-        ### muP: attention scaling 1/dim_heads instead of 1/sqrt(dim_heads)
+        # muP scales attention by 1/dim_heads instead of 1/sqrt(dim_heads).
         attn_scaling = self.attn_scale / v.size(-1)
 
-        # efficient attention using Flash Attention CUDA kernels
         y = torch.nn.functional.scaled_dot_product_attention(
             q,
             k,
             v,
             is_causal=False,
-            scale=attn_scaling,  # muP: attention scaling
+            scale=attn_scaling,
         )
 
-        y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
+        y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")
 
-        # output projection
         y = self.c_proj(y)
 
         return y
 
 
 class Block(nn.Module):
+    """Pre-norm transformer block of the action expert."""
 
     def __init__(
         self,
@@ -204,6 +239,16 @@ class Block(nn.Module):
         attn_scale: float,
         mlp_dim_mult: int = 4,
     ) -> None:
+        """
+        Creates the block layers.
+
+        Args:
+            dim_model: model width.
+            attn_dim: total width of the attention heads.
+            dim_heads: width of one attention head.
+            attn_scale: multiplier on the muP attention scale.
+            mlp_dim_mult: hidden width of the MLP as a multiple of the model width.
+        """
         super().__init__()
         self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=False)
         self.attn = SelfAttention(dim_model, attn_dim, dim_heads, attn_scale)
@@ -211,25 +256,22 @@ class Block(nn.Module):
         self.mlp = MLP(dim_model, mlp_dim_mult)
 
     def forward(self, x: Tensor) -> Tensor:
+        """
+        Applies the block.
+
+        Args:
+            x: features shaped [batch, seq, dim_model].
+
+        Returns:
+            the features with the same shape.
+        """
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
 
 
 class MupActionExpert(nn.Module):
-    """
-    GPT2 implementation following the original formulation to be able to load existing pre-trained weights
-
-    Args:
-        embedding_dim: embedding dimension of VM
-        nb_layers: number of transformer blocks
-        dim_heads: dimension of attention heads
-        vocabulary_size: total number of vector embeddings in GPT's codebook
-        nb_timesteps: maximum number of timesteps found in one sequence
-        nb_tokens_per_timestep: number of tokens ithi each timestep
-        dropout_rate: dropout rate
-        bias: True: bias in Linears. False: a bit better and faster
-    """
+    """Transformer that predicts the flow velocity of noisy action sequences."""
 
     def __init__(
         self,
@@ -247,6 +289,23 @@ class MupActionExpert(nn.Module):
         output_scale: float = 1.0,
         attn_scale: float = 1.0,
     ) -> None:
+        """
+        Creates and initializes the model.
+
+        Args:
+            embedding_dim: model width.
+            attention_dim: total width of the attention heads.
+            action_dim: width of one action.
+            action_horizon: number of actions per sequence.
+            number_high_level_command: number of high-level commands.
+            max_period: longest period of the diffusion step embedding.
+            nb_layers: number of transformer blocks.
+            dim_heads: width of one attention head.
+            mlp_dim_mult: hidden width of the MLP as a multiple of the model width.
+            init_std: standard deviation of the weight init.
+            output_scale: input multiplier of the action readout.
+            attn_scale: multiplier on the muP attention scale.
+        """
         super().__init__()
 
         self.embedding_dim = embedding_dim
@@ -288,46 +347,31 @@ class MupActionExpert(nn.Module):
 
         self.action_decoder = MuReadout(embedding_dim, action_dim, bias=False, output_mult=output_scale)
 
-        # init all weights
-        ################## /!\ IMPORTANT READ ##################
-        ### muP: swap constant std normal init with `normal_` from `mup.init`.
-        ### Because `_init_weights` is called in `__init__`, before `infshape` is set,
-        ### we need to manually call `self.apply(self._init_weights)` after calling
-        ### `set_base_shape(model, base)`
-        ###
-        ### for proper muP init
-        ### 1. instantiate model
-        ### 2. call set_base_shape(model, base_shape.bsh)
-        ### 3. reinit manually with model.apply(model._init_weights)
+        # This runs before set_base_shapes, so a proper muP init re-applies _init_weights after it.
         self.apply(self._init_weights)
 
-        # report number of parameters
         print("number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding: bool = True) -> int:
         """
-        Return the number of parameters in the model.
-        For non-embedding count (default), the position embeddings get subtracted.
-        The token embeddings would too, except due to the parameter sharing these
-        params are actually used as weights in the final layer, so we include them.
+        Counts the model's parameters.
+
+        Args:
+            non_embedding: unused; every parameter is counted.
+
+        Returns:
+            the number of parameters.
         """
         n_params = sum(p.numel() for p in self.parameters())
         return n_params
 
     def _init_c_proj_residual(self, module: nn.Module) -> None:
         """
-        Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
+        Scales the init std of the residual output projections by 1/sqrt(2 * nb_layers), as in GPT-2.
 
-            > A modified initialization which accounts for the accumulation on the residual path with model depth. Scale
-            > the weights of residual layers at initialization by a factor of 1/√N where N is the # of residual layers.
-            >   -- GPT-2 :: https://openai.com/blog/better-language-models/
-
-        This is combined with the muP initilization that is scaling init_std by 1/sqrt(width).
-
-        Note: for the MLP c_proj, the scaling is 1/sqrt(width * mlp_hidden_mult)
+        Args:
+            module: attention or MLP module whose c_proj weights are re-initialized.
         """
-        # times 2 because in a block there are 2 residual paths, attn & mlp
-
         depth_std = self.init_std * (2 * self.nb_layers) ** -0.5
 
         for p_name, p in module.named_parameters():
@@ -339,38 +383,13 @@ class MupActionExpert(nn.Module):
 
     def _init_weights(self, module: nn.Module) -> None:
         """
-        This function is called using model.apply(model._init_weights)
+        Initializes one module; model.apply visits children before parents, so a parent's rule overrides its layers' init.
 
-        This will apply `_init_weights` recursively to every submodule.
-        Children are seen first and then Parents.
-
-        Example with the model=MLP(), if we print every module seen it gives:
-
-            Linear(in_features=128, out_features=512, bias=False)
-            ------------------------------
-            GELU(approximate='none')
-            ------------------------------
-            Linear(in_features=512, out_features=128, bias=False)
-            ------------------------------
-            MLP(
-            (c_fc): Linear(in_features=128, out_features=512, bias=False)
-            (gelu): GELU(approximate='none')
-            (c_proj): Linear(in_features=512, out_features=128, bias=False)
-            )
-
-        This means that specific initialization to MLP using isinstance(module, MLP)
-        will override the initialization from isinstance(module, nn.Linear)
-
-        We use this fact apply specific initialization rules in some modules.
-        For example the init scaling of the MLP hidden nn.Linear layer is different
-        than other nn.Linear layers.
+        Args:
+            module: module to initialize.
         """
-
-        # MuReadout zero init
         if isinstance(module, MuReadout):
-            # https://arxiv.org/abs/2404.05728 | 4.2.6 SP Unembedding Initialization
-            # A simple alternative to either initialization is a zeroinitialized unembedding projection [15],
-            # which we found to perform similarly to the µP initialization and to also facilitate transfer
+            # Zero-init readout, see https://arxiv.org/abs/2404.05728 section 4.2.6.
             module.weight.data.zero_()
 
         elif isinstance(module, nn.Linear):
@@ -395,17 +414,10 @@ class MupActionExpert(nn.Module):
                 module.weight.data.fill_(1.0)
 
         elif isinstance(module, SelfAttention):
-            ### muP query zero init
-            # yield equal attention weights over all past timesteps at initialization
-
-            # if attention uses nn.Linear fanout is first dim
-            # because nn.Linear applies y=xA.T+b
-            # if using Conv1D as in hugginfaces transformers, fanout is last dim
+            # muP zero-inits the query rows of c_attn so attention starts uniform.
             fanout, _ = module.c_attn.weight.shape
-            assert fanout % 3 == 0  # assert matrix is used for query, key and value
+            assert fanout % 3 == 0
 
-            # if attention uses, nn.Linear change init in first dim
-            # if using Conv1D, change init in last dim
             module.c_attn.weight.data[: fanout // 3, :] = 0
 
             self._init_c_proj_residual(module)
@@ -414,8 +426,17 @@ class MupActionExpert(nn.Module):
             self._init_c_proj_residual(module)
 
     def forward(self, noisy_actions: Tensor, high_level_command: Tensor, t: Tensor) -> Tensor:
+        """
+        Predicts the flow velocity of the noisy actions without visual context.
 
-        # noisy_actions: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
+        Args:
+            noisy_actions: noisy actions shaped [batch, context, horizon, action_dim].
+            high_level_command: command ids shaped [batch, context].
+            t: diffusion steps shaped [batch, context].
+
+        Returns:
+            the predicted velocity with the shape of noisy_actions.
+        """
         action_embeds = self.action_encoder(actions=noisy_actions, high_level_command=high_level_command, diffusion_step=t)
         action_embeds = rearrange(action_embeds, "b t h d -> b (t h) d")
 

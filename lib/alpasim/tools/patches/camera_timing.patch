@@ -1,0 +1,60 @@
+Lets a camera's frames start later than the render start (first_frame_offset_us of a camera config), and drops the
+check that every camera has a frame on the steps that skip the driver. The local Physical-AI-AV run skips the driver
+during the 1.7 s force-GT, like the challenge, and renders its camera every 0.5 s from 0.2 s on, so it plans at 1.7,
+2.2, 2.7 s on fresh frames as the challenge does with its 10 Hz cameras, with a fifth of their frames.
+setup_alpasim.sh applies it.
+
+diff --git a/src/runtime/alpasim_runtime/config.py b/src/runtime/alpasim_runtime/config.py
+index 6a7c368..982bb08 100644
+--- a/src/runtime/alpasim_runtime/config.py
++++ b/src/runtime/alpasim_runtime/config.py
+@@ -174,6 +174,10 @@ class RuntimeCameraConfig:
+     width: int = 256
+     frame_interval_us: int = 33_000  # about 30fps
+     shutter_duration_us: int = 17_000
++    # Delays every frame of the camera by this much after the render start, e.g.
++    # so a camera slower than the control step still has a frame at the end of
++    # force-GT.
++    first_frame_offset_us: int = 0
+ 
+ 
+ @dataclass
+diff --git a/src/runtime/alpasim_runtime/events/policy.py b/src/runtime/alpasim_runtime/events/policy.py
+index 890f25b..53481dd 100644
+--- a/src/runtime/alpasim_runtime/events/policy.py
++++ b/src/runtime/alpasim_runtime/events/policy.py
+@@ -70,7 +70,12 @@ class PolicyEvent(RecurringEvent):
+         state.step_context.force_gt = target_time_us in state.unbound.force_gt_period
+ 
+         # --- Sensor sync validation ---
+-        if state.unbound.assert_zero_decision_delay:
++        # A step that skips the driver needs no frame yet: a delayed camera may
++        # not have one.
++        skips_driver = (
++            state.step_context.force_gt and state.unbound.skip_driver_during_force_gt
++        )
++        if state.unbound.assert_zero_decision_delay and not skips_driver:
+             assert_sensors_up_to_date(state, step_start_us, self.camera_ids)
+ 
+         # --- Submit observations concurrently ---
+diff --git a/src/runtime/alpasim_runtime/unbound_rollout.py b/src/runtime/alpasim_runtime/unbound_rollout.py
+index 2d7300b..a5419aa 100644
+--- a/src/runtime/alpasim_runtime/unbound_rollout.py
++++ b/src/runtime/alpasim_runtime/unbound_rollout.py
+@@ -138,6 +138,16 @@ def _build_rollout_timing(
+                 render_start_us,
+             )
+ 
++    # The render start, and with it force-GT and the policy start, stays at the
++    # recording's first frame.
++    for camera_cfg in camera_configs:
++        offset_us = camera_cfg.first_frame_offset_us
++        if offset_us:
++            frame_range = first_camera_frame_ranges_us[camera_cfg.logical_id]
++            first_camera_frame_ranges_us[camera_cfg.logical_id] = range(
++                frame_range.start + offset_us, frame_range.stop + offset_us
++            )
++
+     first_policy_timestamp_us = renderer_service.required_policy_start_timestmap_us(
+         render_start_us
+     )

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """The CARLA rig of a trained policy, recovered from the sensor_rig yaml of its training run."""
 
 from __future__ import annotations
@@ -6,6 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 import yaml
@@ -43,24 +47,14 @@ _LIDAR_MOUNTS: list[dict[str, float]] = [
 
 
 class SensorRig:
-    """
-    The sensors a policy was trained on, as CARLA mounts and as 123D metadata.
-
-    A training run writes the modality metadata of its data source next to the
-    checkpoint; that file is the only description of the rig the model expects,
-    so evaluation mounts exactly what it names.
-    """
+    """The sensors a policy was trained on, as CARLA mounts and as 123D metadata."""
 
     def __init__(self, sensor_rig_file: str) -> None:
         """
-        Reads the rig, idealizing what CARLA cannot reproduce exactly.
-
-        Lens distortion is dropped (CARLA renders ideal pinholes) and an
-        off-center principal point is realized by rendering an overscanned frame
-        that crop_to_rig cuts back to the metadata's geometry.
+        Reads the rig, dropping lens distortion and overscanning cameras whose principal point is off-center.
 
         Args:
-            sensor_rig_file: sensor_rig_<source>.yaml of the training run.
+            sensor_rig_file: sensor_rig_<dataset>.yaml of the training run.
         """
         rig: dict[str, Any] = yaml.safe_load(Path(sensor_rig_file).read_text())
         raw_modalities = cast("dict[str, dict[str, Any]]", rig["modalities"])
@@ -164,14 +158,14 @@ class SensorRig:
     def crop_to_rig(
         self,
         camera_id: CameraID,
-        image: npt.NDArray[np.uint8],
-    ) -> npt.NDArray[np.uint8]:
+        image: jt.UInt8[npt.NDArray[np.uint8], "render_height render_width 4"],
+    ) -> jt.UInt8[npt.NDArray[np.uint8], "height width 4"]:
         """
         Cuts a rendered frame back to the rig's geometry, landing the principal point where the metadata says.
 
         Args:
             camera_id: the 123D camera id.
-            image: the frame CARLA rendered at the overscanned size.
+            image: the BGRA frame CARLA rendered at the overscanned size.
 
         Returns:
             the metadata-sized frame.
@@ -278,13 +272,9 @@ class SensorRig:
     def merge_lidar_sweeps(
         self,
         sweeps: list[npt.NDArray[np.float32]],
-    ) -> npt.NDArray[np.float32]:
+    ) -> jt.Float32[npt.NDArray[np.float32], "num_points 3"]:
         """
-        Merges this tick's raw CARLA sweeps into the point cloud the logs store.
-
-        Reproduces the collector's chain: each lidar's mount transform, the cut
-        of the ego's own returns, the flip into the 123D rear-axle frame, and the
-        storage quantization.
+        Merges this tick's raw CARLA sweeps into the point cloud the logs store, the way the collector did.
 
         Args:
             sweeps: each lidar's (x, y, z, intensity) returns in its own frame,
@@ -312,8 +302,8 @@ class SensorRig:
 
 def _mount_sweep(
     mount: dict[str, float],
-    sweep: npt.NDArray[np.float32],
-) -> npt.NDArray[np.float64]:
+    sweep: jt.Float32[npt.NDArray[np.float32], "num_points 4"],
+) -> jt.Float64[npt.NDArray[np.float64], "num_points 3"]:
     """
     Places one lidar's returns in the CARLA ego frame the collector merged them in.
 
@@ -348,9 +338,7 @@ def _pose_to_carla_mount(
     """
     Expresses a 123D rear-axle-frame sensor pose as a CARLA mount pose.
 
-    CARLA's ego frame sits on the floor under the vehicle centre and is
-    left-handed, so the offsets undo the rear-axle anchoring and the y axis, the
-    pitch and the yaw flip sign.
+    CARLA's ego frame sits on the floor under the vehicle centre and is left-handed, so y, pitch and yaw flip sign.
 
     Args:
         pose: the sensor pose in the 123D IMU frame.

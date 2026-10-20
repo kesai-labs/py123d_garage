@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """VaVAM context frames: timestamp matching, young-rollout padding, dropout rejection."""
 
 from __future__ import annotations

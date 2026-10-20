@@ -4,11 +4,12 @@
 
 from __future__ import annotations
 
+import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
 from numba import njit, prange
 
-# Points within 20 m (L1) of a center required to fit planes around it.
+# Points within _NEAR_CENTER_RADIUS_M of a center required to fit planes around it.
 _MIN_POINTS_NEAR_CENTER = 3
 # Ground percentile below which points are always marked as ground.
 _GROUND_PERCENTILE = 30.0
@@ -22,7 +23,7 @@ def generate_center_grid(
     max_x: float,
     min_y: float,
     max_y: float,
-) -> npt.NDArray[np.float64]:
+) -> jt.Float64[npt.NDArray[np.float64], "num_centers 2"]:
     """
     Generates the grid of centers that ground planes are fitted around.
 
@@ -34,7 +35,7 @@ def generate_center_grid(
         max_y: right boundary of the area to cover, in meters.
 
     Returns:
-        centers of shape [C, 2].
+        the (x, y) centers, the ego origin last.
     """
     x_values = np.arange(
         min_x - center_resolution // 2,
@@ -47,13 +48,22 @@ def generate_center_grid(
         center_resolution,
     )
     grid_points = [(float(x), float(y)) for x in x_values for y in y_values]
-    grid_points.append((0.0, 0.0))  # the ego origin, always fitted
+    grid_points.append((0.0, 0.0))
     return np.array(grid_points, dtype=np.float64).reshape(-1, 2)
 
 
 @njit(cache=True)
 def _median_of_lowest(values: npt.NDArray[np.float64], count: int) -> float:
-    """Median of the count smallest values, via partial selection."""
+    """
+    Computes the median of the count smallest values, via partial selection.
+
+    Args:
+        values: the values.
+        count: how many of the smallest values to take.
+
+    Returns:
+        the median of those values.
+    """
     if count % 2 == 0:
         partitioned = np.partition(values, count // 2)
         upper = partitioned[count // 2]
@@ -65,7 +75,16 @@ def _median_of_lowest(values: npt.NDArray[np.float64], count: int) -> float:
 
 @njit(cache=True)
 def _percentile(values: npt.NDArray[np.float64], q: float) -> float:
-    """Linear-interpolation percentile via partial selection."""
+    """
+    Computes a linear-interpolation percentile via partial selection.
+
+    Args:
+        values: the values.
+        q: the percentile in [0, 100].
+
+    Returns:
+        the percentile value.
+    """
     position = (values.shape[0] - 1) * (q / 100.0)
     upper_index = int(np.ceil(position))
     fraction = position - np.floor(position)
@@ -91,10 +110,19 @@ def _fit_segment(
     center_threshold: float,
 ) -> None:
     """
-    Iterative ground-plane fit of one radial segment, writing into ground.
+    Fits a ground plane to one radial segment and marks its ground points, plus all below the 30th height percentile.
 
-    Seeds from the median height of the num_lowest_points lowest near-center points, refined
-    num_iterations times, plus everything below the segment's 30th height percentile.
+    Args:
+        x: x of the segment's points.
+        y: y of the segment's points.
+        z: z of the segment's points.
+        distances: L1 distance of each point to the center.
+        ground: output mask, written in place.
+        num_iterations: refinement iterations of the plane fit.
+        num_lowest_points: how many lowest near-center points seed the initial height estimate.
+        seed_threshold: height band around the seed estimate that starts the fit, in meters.
+        distance_threshold: how far above the fitted plane a point still counts as ground.
+        center_threshold: L1 radius within which points may seed a fit, in meters.
     """
     num_points = x.shape[0]
     if num_points < _MIN_POINTS_NEAR_CENTER:
@@ -152,7 +180,7 @@ def _fit_segment(
         rhs[0] = sxz
         rhs[1] = syz
         rhs[2] = sz
-        # degenerate (collinear) seeds make the matrix singular; skip the segment
+        # Degenerate (collinear) seeds make the matrix singular; skip the segment.
         try:
             coefficients = np.linalg.solve(normal_matrix, rhs)
         except Exception:
@@ -192,7 +220,28 @@ def _process_center(
     max_radius: float,
     min_radius: float,
 ) -> None:
-    """Fits the radial segments of one center, writing member results in place."""
+    """
+    Fits the radial segments of one center, writing its members' results in place.
+
+    Args:
+        points: the (x, y, z) point cloud.
+        center_x: x of the center.
+        center_y: y of the center.
+        member_point: flat output of the point index of each member.
+        member_ground: flat output of the ground flag of each member.
+        base: start of this center's slice in the flat outputs.
+        num_members: number of points in this center's ring.
+        min_angles: lower angle bound of each segment.
+        max_angles: upper angle bound of each segment.
+        num_segments: number of radial segments.
+        num_iterations: refinement iterations of the plane fit.
+        num_lowest_points: how many lowest near-center points seed the initial height estimate.
+        seed_threshold: height band around the seed estimate that starts the fit, in meters.
+        distance_threshold: how far above the fitted plane a point still counts as ground.
+        center_threshold: L1 radius within which points may seed a fit, in meters.
+        max_radius: outer L1 radius of the ring, in meters.
+        min_radius: inner L1 radius of the ring, in meters.
+    """
     num_points = points.shape[0]
 
     member_x = np.empty(num_members, np.float64)
@@ -214,8 +263,7 @@ def _process_center(
         member_z[index] = points[k, 2]
         member_distance[index] = distance
 
-        # The segment boundaries are floats; on the (ulp-rare) overlap of adjacent segments the
-        # higher one wins, matching a linear scan from the top.
+        # On the rare float overlap of adjacent segments the higher one wins, matching a linear scan from the top.
         angle = np.arctan2(points[k, 1] - center_y, points[k, 0] - center_x)
         guess = int((angle + np.pi) / angle_step)
         segment = -1
@@ -289,10 +337,22 @@ def fit_ground(
     min_radius: float,
 ) -> npt.NDArray[np.bool_]:
     """
-    Fits ground planes around all centers, returning the union of the ground masks.
+    Fits ground planes around all centers in parallel, deterministic regardless of thread count.
 
-    Centers run in parallel into disjoint slices of flat member arrays; the final union is a
-    serial scatter, so the result is deterministic regardless of thread count.
+    Args:
+        points: the (x, y, z) point cloud.
+        centers: the (x, y) centers to fit around.
+        num_segments: number of radial segments around each center.
+        num_iterations: refinement iterations of the plane fit.
+        num_lowest_points: how many lowest near-center points seed the initial height estimate.
+        seed_threshold: height band around the seed estimate that starts the fit, in meters.
+        distance_threshold: how far above the fitted plane a point still counts as ground.
+        center_threshold: L1 radius within which points may seed a fit, in meters.
+        max_radius: outer L1 radius of the ring a center fits over, in meters.
+        min_radius: inner L1 radius of that ring, in meters.
+
+    Returns:
+        the union of the ground masks of all centers.
     """
     num_points = points.shape[0]
     num_centers = centers.shape[0]
@@ -358,7 +418,7 @@ def fit_ground(
 
 
 def remove_ground(
-    points: npt.NDArray[np.floating],
+    points: jt.Float[npt.NDArray[np.floating], "num_points 3"],
     bounds: tuple[float, float, float, float],
     num_segments: int = 8,
     num_iterations: int = 2,
@@ -369,12 +429,12 @@ def remove_ground(
     min_radius: float = 1.0,
     max_radius: float = 32.0,
     center_resolution: float = 28.0,
-) -> npt.NDArray[np.bool_]:
+) -> jt.Bool[npt.NDArray[np.bool_], " num_points"]:
     """
     Marks the ground points of an ego-frame point cloud.
 
     Args:
-        points: the point cloud of shape [N, 3], in the ego frame.
+        points: the point cloud in the ego frame.
         bounds: the area to cover as (min_x, max_x, min_y, max_y) in meters, matching the BEV
             grid the points are rasterized into.
         num_segments: number of radial segments to divide around each center.
@@ -388,7 +448,7 @@ def remove_ground(
         center_resolution: spacing between fit centers, in meters.
 
     Returns:
-        boolean mask of shape [N]; True marks a ground point.
+        the mask that is True for ground points.
     """
     points = points.astype(np.float64, copy=False)
     min_x, max_x, min_y, max_y = bounds

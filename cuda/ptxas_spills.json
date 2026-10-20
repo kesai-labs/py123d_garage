@@ -1,0 +1,184 @@
+{
+  "sm_120": {
+    "py123d_garage_cuda::(anonymous namespace)::swiglu_backward_bias_kernel(__nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, float*, long, int, long const*, unsigned int, float)": [
+      24,
+      28
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<false, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      4,
+      12
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<false, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      12,
+      28
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<false, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      40,
+      64
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<false, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      8,
+      8
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<true, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      28,
+      32
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<true, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      40,
+      64
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::depthwise_conv_tiled_kernel<3, 32, false>(__nv_bfloat162 const*, __nv_bfloat162 const*, __nv_bfloat162 const*, __nv_bfloat162*, int, int, int)": [
+      24,
+      24
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::depthwise_conv_tiled_kernel<3, 32, true>(__nv_bfloat162 const*, __nv_bfloat162 const*, __nv_bfloat162 const*, __nv_bfloat162*, int, int, int)": [
+      24,
+      24
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s1_kernel<20, 2, 2, false, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, uint4 const*, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      96,
+      108
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s1_kernel<20, 2, 2, true, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, uint4 const*, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      36,
+      48
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<1, 4, 2, 2, __nv_bfloat16, false>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, __nv_bfloat16 const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      4,
+      4
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<1, 4, 2, 2, __nv_bfloat16, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, __nv_bfloat16 const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      72,
+      72
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<1, 4, 2, 2, float, false>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, float const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      4,
+      4
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<1, 4, 2, 2, float, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, float const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      40,
+      40
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<2, 4, 2, 2, __nv_bfloat16, false>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, __nv_bfloat16 const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      44,
+      44
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<2, 4, 2, 2, __nv_bfloat16, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, __nv_bfloat16 const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      16,
+      16
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<2, 4, 2, 2, float, false>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, float const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      60,
+      60
+    ],
+    "void py123d_garage_cuda::depthwise_tc::(anonymous namespace)::weight_grad_kernel<16>(CUtensorMap_st, CUtensorMap_st, float*, int, int, int, int)": [
+      44,
+      76
+    ],
+    "void py123d_garage_cuda::depthwise_tc::(anonymous namespace)::weight_grad_kernel<32>(CUtensorMap_st, CUtensorMap_st, float*, int, int, int, int)": [
+      12,
+      28
+    ]
+  },
+  "sm_80": {
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<false, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      32,
+      16
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<false, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      48,
+      24
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<true, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      72,
+      40
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<true, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      88,
+      76
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<false, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      20,
+      24
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<true, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      24,
+      28
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<true, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      32,
+      36
+    ]
+  },
+  "sm_90a": {
+    "py123d_garage_cuda::(anonymous namespace)::swiglu_backward_bias_kernel(__nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, float*, long, int, long const*, unsigned int, float)": [
+      20,
+      40
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<false, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      16,
+      8
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<false, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      24,
+      12
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<true, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      140,
+      172
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_backward_kernel<true, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      96,
+      72
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<false, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      28,
+      28
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<true, false>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      60,
+      60
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::attention_forward_kernel<true, true>(py123d_garage_cuda::(anonymous namespace)::Params)": [
+      24,
+      24
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s1_kernel<16, 2, 2, false, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, uint4 const*, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      44,
+      56
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s1_kernel<16, 2, 2, true, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, uint4 const*, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      24,
+      24
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s1_kernel<20, 2, 2, false, false>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, uint4 const*, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      48,
+      52
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s1_kernel<20, 2, 2, false, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, uint4 const*, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      56,
+      72
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s1_kernel<20, 2, 2, true, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, uint4 const*, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      200,
+      228
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<1, 4, 2, 2, __nv_bfloat16, false>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, __nv_bfloat16 const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      24,
+      24
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<2, 4, 2, 2, __nv_bfloat16, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, __nv_bfloat16 const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      120,
+      120
+    ],
+    "void py123d_garage_cuda::(anonymous namespace)::grouped_conv_s2_kernel<2, 4, 2, 2, float, true>(CUtensorMap_st, CUtensorMap_st, CUtensorMap_st, float const*, py123d_garage_cuda::(anonymous namespace)::WeightStrides, __nv_bfloat16*, int, int, int, int, int, int, py123d_garage_cuda::(anonymous namespace)::BnArgs)": [
+      64,
+      64
+    ],
+    "void py123d_garage_cuda::depthwise_tc::(anonymous namespace)::weight_grad_kernel<16>(CUtensorMap_st, CUtensorMap_st, float*, int, int, int, int)": [
+      32,
+      36
+    ]
+  }
+}

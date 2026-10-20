@@ -47,17 +47,25 @@ from py123d_garage.evaluation.navsim.help.utils.pdm_enums import (
 
 @dataclass
 class PDMResults:
-    """Helper dataclass to record PDM results."""
+    """The PDM sub-scores and final score of one proposal."""
 
+    # No at-fault collision score: 1, 0.5 for a static object, or 0.
     no_at_fault_collisions: float
+    # Whether ego stays in the drivable area.
     drivable_area_compliance: float
+    # Driving direction score: 1, 0.5 or 0 by the distance driven against traffic.
     driving_direction_compliance: float
+    # Whether ego never enters a red light lane.
     traffic_light_compliance: float
 
+    # Route progress relative to the best proposal, in [0, 1].
     ego_progress: float
+    # Whether the time to collision stays above the bound.
     time_to_collision_within_bound: float
+    # Whether all comfort metrics stay within bounds.
     comfort: float
 
+    # Product of the multiplicative metrics times the weighted average of the weighted metrics.
     pdm_score: float
 
 
@@ -65,26 +73,37 @@ class PDMResults:
 class PDMScorerConfig:
     """Configuration of metric weights and thresholds used by the PDMScorer."""
 
-    # weighted metric weights
+    # Weight of the progress metric.
     progress_weight: float = 5.0
+    # Weight of the time-to-collision metric.
     ttc_weight: float = 5.0
+    # Weight of the comfort metric.
     comfort_weight: float = 2.0
 
-    # thresholds
-    # comfort related config in navsim/planning/simulation/planner/pdm_planner/scoring/pdm_comfort_metrics.py
-    driving_direction_horizon: float = 1.0  # [s] (driving direction) (nuplan)
-    driving_direction_compliance_threshold: float = 2.0  # [m] (driving direction) (nuplan)
-    driving_direction_violation_threshold: float = 6.0  # [m] (driving direction) (nuplan)
+    # Window in seconds over which the distance driven against traffic is summed.
+    driving_direction_horizon: float = 1.0
+    # Distance in meters against traffic below which driving direction scores 1.
+    driving_direction_compliance_threshold: float = 2.0
+    # Distance in meters against traffic from which driving direction scores 0.
+    driving_direction_violation_threshold: float = 6.0
 
-    stopped_speed_threshold: float = 5e-03  # [m/s] (ttc)
-    future_collision_horizon_window: float = 1.0  # [s] (ttc)
-    progress_distance_threshold: float = 5.0  # [m] (progress)
+    # Speed in m/s below which ego counts as stopped for time to collision.
+    stopped_speed_threshold: float = 5e-03
+    # Window in seconds ego is projected ahead for time to collision.
+    future_collision_horizon_window: float = 1.0
+    # Best progress in meters below which every proposal gets full progress.
+    progress_distance_threshold: float = 5.0
 
     @property
     def weighted_metrics_array(
         self,
     ) -> jt.Float64[npt.NDArray[np.float64], " 3"]:
-        """Per-metric weights laid out by WeightedMetricIndex."""
+        """
+        The weighted metric weights as an array.
+
+        Returns:
+            The weights in WeightedMetricIndex order.
+        """
         weighted_metrics = np.zeros(len(WeightedMetricIndex), dtype=np.float64)
         weighted_metrics[WeightedMetricIndex.PROGRESS] = self.progress_weight
         weighted_metrics[WeightedMetricIndex.TTC] = self.ttc_weight
@@ -94,23 +113,38 @@ class PDMScorerConfig:
 
 @dataclass
 class PDMScorerState:
-    """Per-call mutable state of the PDMScorer holding the metric arrays for all proposals."""
+    """The metric arrays of one score_proposals call."""
 
+    # Occupancy maps of objects and red lights over time.
     observation: PDMObservation
+    # Route centerline that progress is measured along.
     centerline: PolylineSE2
+    # IDs of the on-route lane groups.
     route_lane_ids: list[int]
+    # Drivable polygons keyed by "<layer>-<object id>".
     drivable_area_map: OccupancyMap2D
+    # Number of scored proposals.
     num_proposals: int
+    # Ego metadata holding the vehicle dimensions.
     ego_metadata: EgoStateSE3Metadata
 
+    # Simulated rear-axle ego states.
     states: jt.Float64[npt.NDArray[np.float64], "proposals times 11"]
+    # Ego corners and center in BBCoordsIndex order.
     ego_coords: jt.Float64[npt.NDArray[np.float64], "proposals times 5 2"]
+    # Ego footprint polygons.
     ego_polygons: npt.NDArray[np.object_]
+    # Ego area flags in EgoAreaIndex order.
     ego_areas: jt.Bool[npt.NDArray[np.bool_], "proposals times 4"]
+    # Multiplicative metrics in MultiMetricIndex order.
     multi_metrics: jt.Float64[npt.NDArray[np.float64], "4 proposals"]
+    # Weighted metrics in WeightedMetricIndex order.
     weighted_metrics: jt.Float64[npt.NDArray[np.float64], "3 proposals"]
+    # Unnormalized progress in meters.
     progress_raw: jt.Float64[npt.NDArray[np.float64], " proposals"]
+    # First time index of an at-fault collision, infinity if none.
     collision_time_idcs: jt.Float64[npt.NDArray[np.float64], " proposals"]
+    # First time index of a time-to-collision violation, infinity if none.
     ttc_time_idcs: jt.Float64[npt.NDArray[np.float64], " proposals"]
 
     @classmethod
@@ -127,15 +161,15 @@ class PDMScorerState:
         Builds a fresh scorer state with zero-initialized metric arrays for the proposals.
 
         Args:
-            states: array representation of simulated proposals
-            observation: PDM's observation class
-            centerline: path of the centerline
-            route_lane_ids: list containing on-route lane ids
-            drivable_area_map: occupancy map of drivable area polygons
-            ego_metadata: metadata (dimensions) of the ego vehicle
+            states: Simulated ego states of the proposals.
+            observation: Occupancy maps of objects and red lights over time.
+            centerline: Route centerline.
+            route_lane_ids: IDs of the on-route lane groups.
+            drivable_area_map: Occupancy map of the drivable polygons.
+            ego_metadata: Ego metadata holding the vehicle dimensions.
 
         Returns:
-            initialized PDMScorerState
+            The fresh scorer state.
         """
         assert states.ndim == 3
         assert states.shape[2] == len(StateIndex)
@@ -143,13 +177,10 @@ class PDMScorerState:
         num_proposals = states.shape[0]
         num_poses = states.shape[1] - 1
 
-        # calculate coordinates of ego corners and center
         ego_coords = state_array_to_coords_array(states, ego_metadata)
 
-        # initialize all ego polygons from corners
         ego_polygons = coords_array_to_polygon_array(ego_coords)
 
-        # zero initialize all remaining arrays.
         ego_areas = np.zeros(
             (
                 num_proposals,
@@ -168,7 +199,7 @@ class PDMScorerState:
         )
         progress_raw = np.zeros(num_proposals, dtype=np.float64)
 
-        # initialize infraction arrays with infinity (meaning no infraction occurs)
+        # Infinity means no infraction.
         collision_time_idcs = np.zeros(num_proposals, dtype=np.float64)
         ttc_time_idcs = np.zeros(num_proposals, dtype=np.float64)
         collision_time_idcs.fill(np.inf)
@@ -194,7 +225,7 @@ class PDMScorerState:
 
 
 class PDMScorer:
-    """Class to score proposals in PDM pipeline. Re-implements nuPlan's closed-loop metrics."""
+    """Scores proposals with a re-implementation of nuPlan's closed-loop metrics."""
 
     def __init__(
         self,
@@ -202,16 +233,16 @@ class PDMScorer:
         config: PDMScorerConfig | None = None,
     ):
         """
-        Constructor of PDMScorer.
+        Sets up the scorer.
 
         Args:
-            proposal_grid: Sampling parameters for proposals
-            config: metric weights and thresholds, defaults to PDMScorerConfig()
+            proposal_grid: Grid of the proposals to score.
+            config: Metric weights and thresholds, the defaults if None.
         """
         self.proposal_grid = proposal_grid
         self._config = config if config is not None else PDMScorerConfig()
 
-        # lazy loaded
+        # Set by score_proposals().
         self._state: PDMScorerState | None = None
 
     def score_proposals(
@@ -227,18 +258,16 @@ class PDMScorer:
         Scores proposals with PDM's closed-loop metrics, one DataFrame per proposal.
 
         Args:
-            states: array representation of simulated proposals
-            observation: PDM's observation class
-            centerline: path of the centerline
-            route_lane_ids: list containing on-route lane ids
-            drivable_area_map: Occupancy map of drivable area polygons
-            ego_metadata: metadata (dimensions) of the ego vehicle
+            states: Simulated ego states of the proposals.
+            observation: Occupancy maps of objects and red lights over time.
+            centerline: Route centerline.
+            route_lane_ids: IDs of the on-route lane groups.
+            drivable_area_map: Occupancy map of the drivable polygons.
+            ego_metadata: Ego metadata holding the vehicle dimensions.
 
         Returns:
-            A List containing the PDMResult for each proposal
+            One single-row DataFrame of PDMResults per proposal.
         """
-
-        # initialize & lazy load class values
         self._state = PDMScorerState.reset(
             states=states,
             observation=observation,
@@ -248,7 +277,7 @@ class PDMScorer:
             ego_metadata=ego_metadata,
         )
 
-        # fill value ego-area array (used in multiple metrics)
+        # The ego areas feed several metrics below.
         self._calculate_ego_area()
 
         # 1. multiplicative metrics
@@ -319,13 +348,16 @@ class PDMScorer:
     def _aggregate_pdm_scores(
         self,
     ) -> jt.Float64[npt.NDArray[np.float64], " proposals"]:
-        """Aggregates multiplicative and weighted metrics into a final PDM score per proposal."""
+        """
+        Aggregates multiplicative and weighted metrics into a final PDM score per proposal.
+
+        Returns:
+            The PDM score of each proposal.
+        """
         assert self._state is not None, "PDMScorer not initialized properly."
 
-        # accumulate multiplicative metrics
         multiplicate_metric_scores = self._state.multi_metrics.prod(axis=0)
 
-        # normalize and fill progress values
         masked_progress = self._progress_raw * multiplicate_metric_scores
         norm_constant_progress = np.max(masked_progress)
         if norm_constant_progress > self._config.progress_distance_threshold:
@@ -349,9 +381,7 @@ class PDMScorer:
 
     def _calculate_ego_area(self) -> None:
         """
-        Determines the area type each proposal occupies over time.
-
-        Areas are (1) in multiple lanes, (2) non-drivable area, (3) oncoming traffic, or (4) intersection.
+        Flags whether ego spans multiple lanes, leaves the drivable area, is in oncoming traffic or in an intersection.
         """
         assert self._state is not None, "PDMScorer not initialized properly."
 
@@ -368,6 +398,15 @@ class PDMScorer:
         )  # shape: n_proposals, n_horizon, n_polygons, n_points
 
         def _get_indices_of_map_layer(map_layer: MapLayer) -> list[int]:
+            """
+            Finds the drivable area polygons of a map layer.
+
+            Args:
+                map_layer: Map layer to look for.
+
+            Returns:
+                The polygon indices of that layer.
+            """
             assert self._state is not None, "PDMScorer not initialized properly."
             map_object_ids = cast(
                 list[str],
@@ -593,7 +632,6 @@ class PDMScorer:
                 if not oncoming_traffic_masks[proposal_idx, time_idx] or is_in_intersection:
                     oncoming_progress[proposal_idx, time_idx] = 0.0
 
-        # aggregate
         driving_direction_compliance_scores = np.ones(
             self._state.num_proposals,
             dtype=np.float64,
@@ -627,14 +665,9 @@ class PDMScorer:
         self._state.multi_metrics[MultiMetricIndex.DRIVING_DIRECTION] = driving_direction_compliance_scores
 
     def _calculate_progress(self) -> None:
-        """
-        Re-implementation of nuPlan's progress metric (non-normalized).
-
-        Calculates progress along the centerline.
-        """
+        """Re-implementation of nuPlan's progress metric along the centerline, before normalization."""
         assert self._state is not None, "PDMScorer not initialized properly."
 
-        # calculate raw progress in meter
         progress_in_meter = np.zeros(
             self._state.num_proposals,
             dtype=np.float64,
@@ -662,14 +695,13 @@ class PDMScorer:
             for proposal_idx in range(self._state.num_proposals)
         }
 
-        # calculate TTC for specific time horizon (default:1s) in the future with less temporal resolution.
+        # Every third time step within the collision window, assuming 10 Hz poses.
         # Python ints: summed with time_idx below to index PDMObservation, whose __getitem__ is typed `int`.
         future_time_idcs = list(
             range(0, int(self._config.future_collision_horizon_window * 10), 3),
         )
         n_future_steps = len(future_time_idcs)
 
-        # create polygons for each ego position and specific time horizon (default:1s) future projection
         coords_exterior = self._state.ego_coords.copy()
         coords_exterior[:, :, BBCoordsIndex.CENTER, :] = coords_exterior[
             :,
@@ -703,13 +735,10 @@ class PDMScorer:
         polygons = creation.polygons(coords_exterior_time_steps)
         assert isinstance(polygons, np.ndarray), f"Expected polygons to be of type np.ndarray, got {type(polygons)}"
 
-        # ttc needs to look future_time_idcs into the future,
-        # so we can only calculate it for n_proposal_steps_to_evaluate steps
-
+        # TTC looks max(future_time_idcs) steps ahead, which limits the steps it can evaluate.
         n_proposal_steps_to_evaluate = self.proposal_grid.num_poses - max(
             future_time_idcs,
         )
-        # check collision for each proposal and projection
         for time_idx in range(n_proposal_steps_to_evaluate + 1):
             for step_idx, future_time_idx in enumerate(future_time_idcs):
                 current_time_idx = time_idx + future_time_idx
@@ -787,33 +816,26 @@ class PDMScorer:
     def _calculate_traffic_light_compliance(self) -> None:
         """Re-implementation of hydraMDP++'s traffic light compliance metric."""
         assert self._state is not None, "PDMScorer not initialized properly."
-        # Initialize scores for all proposals to 1 (compliant by default)
         traffic_light_compliance_scores = np.ones(
             self._state.num_proposals,
             dtype=np.float64,
         )
 
-        # Iterate over each time step within the horizon
         for time_idx in range(self.proposal_grid.num_poses + 1):
-            # Get ego polygons (vehicle shapes) at the current time step
             ego_polygons = self._state.ego_polygons[:, time_idx]
-            # Query objects intersecting with the ego polygons
             intersecting = self._state.observation[time_idx].query(
                 ego_polygons,
                 predicate="intersects",
             )  # type: ignore[arg-type]
 
-            # If no intersections, skip this time step
             if len(intersecting) == 0:
                 continue
 
-            # Iterate over each intersecting object
             for proposal_idx, geometry_idx in zip(
                 intersecting[0],
                 intersecting[1],
                 strict=True,
             ):
-                # Skip if the score is already 0
                 if traffic_light_compliance_scores[proposal_idx] == 0.0:
                     continue
 
@@ -822,15 +844,13 @@ class PDMScorer:
                     self._state.observation[time_idx].ids[geometry_idx],
                 )
 
-                # Check if the intersecting object is a red light
                 if token.startswith(self._state.observation.red_light_token):
                     traffic_light_compliance_scores[proposal_idx] = 0.0
 
-        # Store the scores in the multi-metrics system for later evaluation
         self._state.multi_metrics[MultiMetricIndex.TRAFFIC_LIGHT_COMPLIANCE] = traffic_light_compliance_scores
 
     def _calculate_comfort(self) -> None:
-        """Implementation of comfort metric, padded with past history states."""
+        """Scores whether each proposal stays within all comfort bounds."""
         assert self._state is not None, "PDMScorer not initialized properly."
         time_point_s: npt.NDArray[np.float64] = (
             np.arange(0, self._state.states.shape[1]).astype(np.float64) * self.proposal_grid.interval_s

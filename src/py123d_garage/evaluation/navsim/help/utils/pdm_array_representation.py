@@ -29,16 +29,15 @@ def ego_state_to_state_array(
     ego_state: EgoStateSE2,
 ) -> jt.Float64[npt.NDArray[np.float64], " 11"]:
     """
-    Converts an EgoStateSE2 into an array representation (drops timestamp and metadata).
+    Converts an ego state into a rear-axle state array.
 
-    The returned array follows StateIndex layout; STEERING_RATE and ANGULAR_ACCELERATION
-    are not represented in py123d's EgoStateSE2 and stay zero.
+    STEERING_RATE and ANGULAR_ACCELERATION are not in EgoStateSE2 and stay zero.
 
     Args:
-        ego_state: EgoStateSE2 instance
+        ego_state: Ego state to convert.
 
     Returns:
-        array filled with ego state values (from the rear axle)
+        The state array in StateIndex layout.
     """
     state_array = np.zeros(len(StateIndex), dtype=np.float64)
 
@@ -63,11 +62,11 @@ def state_array_to_coords_array(
     Converts multi-dim array representation of ego states to bounding box coordinates.
 
     Args:
-        states: array representation of ego states (n_batch, n_time, len(StateIndex))
-        metadata: vehicle metadata
+        states: Rear-axle ego states.
+        metadata: Ego metadata holding the vehicle dimensions.
 
     Returns:
-        multi-dim array of bounding box coordinates
+        The corner and center coordinates in BBCoordsIndex order.
     """
     n_batch, n_time, _ = states.shape
 
@@ -78,7 +77,6 @@ def state_array_to_coords_array(
     headings = states[..., StateIndex.HEADING]
     cos, sin = np.cos(headings), np.sin(headings)
 
-    # calculate ego center from rear axle
     rear_axle_to_center_translate = np.stack(
         [rear_axle_to_center * cos, rear_axle_to_center * sin],
         axis=-1,
@@ -127,12 +125,12 @@ def coords_array_to_polygon_array(
     Converts multi-dim array of bounding box coords to shapely polygons.
 
     Args:
-        coords: bounding box coords (including corners and center)
+        coords: Corner and center coordinates in BBCoordsIndex order.
 
     Returns:
-        array of shapely polygons
+        The shapely polygons.
     """
-    # create coords copy and use center point for closed exterior
+    # The center slot repeats the first corner to close the exterior.
     coords_exterior: npt.NDArray[np.float64] = coords.copy()
     coords_exterior[..., BBCoordsIndex.CENTER, :] = coords_exterior[
         ...,
@@ -140,7 +138,6 @@ def coords_array_to_polygon_array(
         :,
     ]
 
-    # load new coordinates into polygon array
     return shapely.creation.polygons(coords_exterior)  # type: ignore[return-value]
 
 
@@ -152,23 +149,21 @@ def state_array_to_center_state_array(
     Converts a rear-axle-referenced state array to a center-referenced one.
 
     Args:
-        state_array: array representation of ego states (..., len(StateIndex))
-        metadata: vehicle metadata
+        state_array: Rear-axle ego states.
+        metadata: Ego metadata holding the rear axle to center offset.
 
     Returns:
-        center-referenced state array, same shape as input
+        The center-referenced ego states.
     """
     assert state_array.shape[-1] == len(StateIndex)
 
     center_states = np.zeros(state_array.shape, dtype=np.float64)
 
-    # coordinates
     center_states[..., StateIndex.STATE_SE2] = se2_array_translate_longitudinally(
         state_array[..., StateIndex.STATE_SE2],
         metadata.rear_axle_to_center_longitudinal,
     )
 
-    # velocity & acceleration
     displacement = np.zeros((1, 2), dtype=np.float64)
     displacement[..., PointIndex.X] = metadata.rear_axle_to_center_longitudinal
 
@@ -184,7 +179,6 @@ def state_array_to_center_state_array(
         state_array[..., StateIndex.ANGULAR_ACCELERATION],
     )
 
-    # rest is copied
     center_states[..., StateIndex.STEERING_ANGLE] = state_array[
         ...,
         StateIndex.STEERING_ANGLE,

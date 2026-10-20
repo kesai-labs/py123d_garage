@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 exclude: ^lib/
 
 repos:
@@ -21,9 +24,9 @@ repos:
       - id: mixed-line-ending # replaces or checks mixed line ending.
       - id: trailing-whitespace # trims trailing whitespace.
       - id: check-json
-        exclude: /README\.rst$|\.pot?$
+        exclude: \.pot?$
       - id: pretty-format-json
-        exclude: /README\.rst$|\.pot?$|\.ipynb$
+        exclude: \.pot?$|\.ipynb$
         args: [--no-sort-keys, --autofix]
 
   - repo: https://github.com/pre-commit/pygrep-hooks
@@ -75,6 +78,24 @@ repos:
       - id: shellcheck
         args: [--severity=error]
 
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v20.1.8
+    hooks:
+      - id: clang-format
+        types_or: [c, c++, cuda]
+        files: ^cuda/
+
+  - repo: https://github.com/cpplint/cpplint
+    rev: 2.0.2
+    hooks:
+      - id: cpplint
+        files: ^cuda/.*\.(cu|cuh|cpp|h)$
+        args:
+          - --linelength=120
+          - --extensions=cu,cuh,cpp,h
+          - --headers=cuh,h
+          - --filter=-build/include_what_you_use,-build/namespaces,-whitespace/indent_namespace
+
   - repo: local
     hooks:
       - id: ruff
@@ -117,4 +138,4 @@ repos:
         # This makes basedpyright more efficient
         pass_filenames: false
         types: [python]
-        files: ^(src/py123d_garage|tests)/
+        files: ^(src/py123d_garage|cuda/src|tests)/

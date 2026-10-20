@@ -1,36 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 name: sync_checkpoints
 description: >-
-  Incremental download of the published checkpoints into $HOME/ci-cache of
+  Incremental download of the released checkpoints into $HOME/ci-cache of
   whichever machine the job landed on, and exports CHECKPOINT_CACHE. The flock
   covers overlapping jobs, so the first job on a machine downloads while the
   others wait.
 inputs:
   hf-token:
-    description: Hugging Face token for the private checkpoint repo.
+    description: Hugging Face token; needed while the checkpoint repo is private.
+    required: false
+  repo:
+    description: The Hugging Face model repo holding the checkpoints.
     required: true
   revision:
-    description: Commit of kesai-labs/py123d_garage_dev_pretrained_checkpoints to download.
+    description: Commit of the repo to download.
     required: true
+  include:
+    description: Space-separated glob patterns of the files to download; empty downloads everything.
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
     - shell: bash
       env:
         HF_TOKEN: ${{ inputs.hf-token }}
+        REPO: ${{ inputs.repo }}
         REVISION: ${{ inputs.revision }}
+        INCLUDE: ${{ inputs.include }}
       run: |
-        if [ -z "$HF_TOKEN" ]; then
-          echo "::error::the hf-token input is empty; the checkpoint repo is private"
-          exit 1
-        fi
         uv pip install huggingface_hub
-        cache="$HOME/ci-cache/checkpoints/$REVISION"
+        cache="$HOME/ci-cache/checkpoints/${REPO##*/}/$REVISION"
         mkdir -p "$cache"
+        includes=()
+        for pattern in $INCLUDE; do
+          includes+=(--include "$pattern")
+        done
         (
           flock 9
           for _attempt in 1 2 3 4 5; do
-            hf download kesai-labs/py123d_garage_dev_pretrained_checkpoints \
-              --revision "$REVISION" \
+            hf download "$REPO" --revision "$REVISION" "${includes[@]}" \
               --local-dir "$cache" --max-workers 4 && exit 0
             echo "download attempt $_attempt failed (rate limit?), retrying in 90s"
             sleep 90

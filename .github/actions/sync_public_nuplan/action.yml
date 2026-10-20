@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 name: sync_public_nuplan
 description: >-
   Incremental download of a fixed slice of the public kesai-labs/nuplan release

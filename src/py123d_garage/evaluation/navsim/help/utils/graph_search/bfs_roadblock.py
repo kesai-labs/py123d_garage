@@ -21,12 +21,12 @@ class BreadthFirstSearchLaneGroup:
         forward_search: bool = True,
     ):
         """
-        Constructor of BreadthFirstSearchLaneGroup class.
+        Sets up the search from a start lane group.
 
         Args:
-            start_lane_group_id: lane_group id where graph starts
-            map_api: map interface
-            forward_search: whether to search in driving direction, defaults to True
+            start_lane_group_id: ID of the lane group to start from.
+            map_api: Map holding the lane group graph.
+            forward_search: Whether to search along successors instead of predecessors.
         """
         self._map_api: MapAPI = map_api
 
@@ -47,16 +47,15 @@ class BreadthFirstSearchLaneGroup:
         max_depth: int,
     ) -> tuple[list[LaneGroup], list[int], bool]:
         """
-        Apply BFS to find route to target lane_group.
+        Searches the shortest lane group path to any of the target lane groups.
 
         Args:
-            target_lane_group_id: id of target lane_group
-            max_depth: maximum search depth
+            target_lane_group_id: ID or IDs of the target lane groups.
+            max_depth: Maximum search depth.
 
         Returns:
-            tuple of (route lane groups, route lane group ids, whether a path was found)
+            The path lane groups, their IDs and whether a target was reached.
         """
-
         if isinstance(target_lane_group_id, int):
             target_lane_group_ids = [target_lane_group_id]
         else:
@@ -64,7 +63,6 @@ class BreadthFirstSearchLaneGroup:
 
         start_edge: LaneGroup = self._queue[0]  # type: ignore[assignment]
 
-        # Initial search states
         path_found: bool = False
         end_edge: LaneGroup = start_edge  # type: ignore[assignment]
         end_depth: int = 1
@@ -75,11 +73,10 @@ class BreadthFirstSearchLaneGroup:
         while self._queue:
             current_edge = self._queue.popleft()
 
-            # Early exit condition
             if self._check_end_condition(depth, max_depth):
                 break
 
-            # Depth tracking
+            # None marks the end of a depth level.
             if current_edge is None:
                 depth += 1
                 self._queue.append(None)
@@ -87,7 +84,6 @@ class BreadthFirstSearchLaneGroup:
                     break
                 continue
 
-            # Goal condition
             if self._check_goal_condition(
                 current_edge,
                 target_lane_group_ids,
@@ -101,9 +97,7 @@ class BreadthFirstSearchLaneGroup:
 
             neighbors = current_edge.successors if self._forward_search else current_edge.predecessors
 
-            # Populate queue
             for next_edge in neighbors:
-                # if next_edge.object_id in self._candidate_lane_edge_ids_old:
                 self._queue.append(next_edge)
                 self._parent[str(next_edge.object_id) + f"_{depth + 1}"] = current_edge
                 end_edge = next_edge
@@ -115,7 +109,7 @@ class BreadthFirstSearchLaneGroup:
     @staticmethod
     def _check_end_condition(depth: int, max_depth: int) -> bool:
         """
-        Check if the search should end regardless if the goal condition is met.
+        Checks whether the search exceeded its maximum depth.
 
         Args:
             depth: The current depth to check.
@@ -134,7 +128,7 @@ class BreadthFirstSearchLaneGroup:
         max_depth: int,
     ) -> bool:
         """
-        Check if the current edge is at the target lane_group at the given depth.
+        Checks whether the current lane group is a target within the maximum depth.
 
         Args:
             current_edge: edge to check.
@@ -153,16 +147,15 @@ class BreadthFirstSearchLaneGroup:
         depth: int,
     ) -> tuple[list[LaneGroup], list[int]]:
         """
-        Constructs a path when goal was found.
+        Reconstructs the path to the end lane group by following the parents back to the start.
 
         Args:
             end_edge: The end edge to start back propagating back to the start edge.
             depth: The depth of the target edge.
 
         Returns:
-            The constructed path as a list of LaneGroup
+            The path lane groups and their IDs in driving order.
         """
-
         _end_edge = end_edge
         path = [_end_edge]
         path_id = [_end_edge.object_id]

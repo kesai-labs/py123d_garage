@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for target points read from the route polyline of a real written log."""
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from py123d.parser.base_dataset_parser import ModalitiesSync
 
 from py123d_garage.py123d_help.scene_readers import (
     InsufficientRouteError,
+    get_target_point_poses,
     get_target_points,
 )
 
@@ -128,6 +132,14 @@ def test_curved_drive_stays_on_the_route(tmp_path: Path) -> None:
     np.testing.assert_allclose(target_points[0], expected, atol=5e-2)
 
 
+def test_heading_follows_the_route_tangent(tmp_path: Path) -> None:
+    theta = np.linspace(np.pi, np.pi / 2.0, 200)
+    poses = [(60.0 + 60.0 * np.cos(t), 60.0 * np.sin(t), float(t) - np.pi / 2.0) for t in theta]
+    scene = _write_log(tmp_path, poses)
+    target_point_poses = get_target_point_poses(scene, [45.0])
+    np.testing.assert_allclose(target_point_poses[0, 2], -45.0 / 60.0, atol=2e-2)
+
+
 def test_standstill_prefix_keeps_the_anchor_progress(tmp_path: Path) -> None:
     poses = [(0.0, 0.0, 0.0)] * 10 + [(2.0 * i, 0.0, 0.0) for i in range(30)]
     scene = _write_log(tmp_path, poses)
@@ -161,3 +173,30 @@ def test_log_without_route_raises(tmp_path: Path) -> None:
     )
     with pytest.raises(InsufficientRouteError, match="write_route"):
         get_target_points(scene, [45.0])
+
+
+def test_points_past_the_route_end_are_nan(tmp_path: Path) -> None:
+    scene = _write_log(
+        tmp_path,
+        [(1.0 * i, 0.0, 0.0) for i in range(51)],
+    )  # 50 m
+    target_point_poses = get_target_point_poses(scene, [40.0, 60.0, 80.0], nan_past_route_end=True)
+    np.testing.assert_allclose(target_point_poses[0, :2], [40.0, 0.0], atol=1e-3)
+    assert np.isnan(target_point_poses[1:]).all()
+
+
+def test_log_without_route_gives_nan_points(tmp_path: Path) -> None:
+    scene = _write_log(
+        tmp_path,
+        [(2.0 * i, 0.0, 0.0) for i in range(60)],
+        write_route=False,
+    )
+    target_point_poses = get_target_point_poses(scene, [40.0, 60.0], nan_past_route_end=True)
+    assert target_point_poses.shape == (2, 3)
+    assert np.isnan(target_point_poses).all()
+
+
+def test_point_at_the_route_start_heads_along_it(tmp_path: Path) -> None:
+    scene = _write_log(tmp_path, [(2.0 * i, 0.0, 0.0) for i in range(30)])
+    target_point_poses = get_target_point_poses(scene, [0.0])
+    np.testing.assert_allclose(target_point_poses[0], [0.0, 0.0, 0.0], atol=1e-3)

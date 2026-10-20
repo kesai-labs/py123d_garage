@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 name: compat
 
 # Validates pyproject's requires-python claim and dependency bounds beyond ci's 3.10.
@@ -15,9 +18,11 @@ concurrency:
 
 jobs:
   compat:
+    if: ${{ github.repository_owner == 'kesai-labs' }}
     runs-on: self-hosted
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         resolution: [highest]
@@ -34,10 +39,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install py123d-garage
-        run: uv pip install --resolution ${{ matrix.resolution }} -e ".[train]" --group dev
+        run: uv pip install --resolution ${{ matrix.resolution }} -e ".[train,alpasim]" --group dev
 
       - name: Test with pytest
         env:
           PY123D_GARAGE_RUNTIME_TYPE_CHECKING: "true"
+          # Four of the runner's jobs share its 32 cores; uncapped, torch, OpenBLAS, OpenCV and numba each take all
+          # of them per job, and OpenCV and numba ignore OMP_NUM_THREADS.
+          OMP_NUM_THREADS: "8"
+          OPENCV_FOR_THREADS_NUM: "8"
+          NUMBA_NUM_THREADS: "8"
           PY123D_GARAGE_DATA_ROOT: "/data"
         run: pytest tests/unit -m ""

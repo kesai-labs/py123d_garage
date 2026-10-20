@@ -1,0 +1,15 @@
+Caps casadi below 3.8 in the controller: casadi 3.8.0 dropped the casadi.tools re-exports that do_mpc 5.1.1 imports, so
+a fresh resolution of the controller image breaks its import. setup_alpasim.sh applies it.
+
+diff --git a/src/controller/pyproject.toml b/src/controller/pyproject.toml
+index fbb5916..da84c80 100644
+--- a/src/controller/pyproject.toml
++++ b/src/controller/pyproject.toml
+@@ -10,6 +10,7 @@ requires-python = ">=3.11,<3.13"
+ dependencies = [
+     "numpy",
+     "do_mpc",
++    "casadi<3.8",  # 3.8.0 dropped the casadi.tools re-exports do_mpc imports
+     "pytest",
+     "matplotlib",
+     "osqp",

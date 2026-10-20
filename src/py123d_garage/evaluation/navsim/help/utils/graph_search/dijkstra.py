@@ -9,15 +9,11 @@ from py123d.datatypes import Lane, LaneGroup
 
 
 class Dijkstra:
-    """
-    Performs Dijkstra's shortest-path search on a lane-level graph.
-
-    The goal condition is met when a lane is found in the target lane_group.
-    """
+    """Dijkstra search on the lane graph for a path to any lane of a target lane group."""
 
     def __init__(self, start_lane: Lane, candidate_lane_ids: list[int]):
         """
-        Constructor for the Dijkstra class.
+        Sets up the search from a start lane.
 
         Args:
             start_lane: The starting lane for the search
@@ -29,17 +25,16 @@ class Dijkstra:
 
     def search(self, target_lane_group: LaneGroup) -> tuple[list[Lane], bool]:
         """
-        Performs dijkstra's shortest path to find a route to the target lane_group.
+        Searches the shortest path from the start lane to the target lane group.
 
         Args:
             target_lane_group: The target lane_group the path should end at.
 
         Returns:
-            - A route starting from the given start lane - A bool indicating if the route is successfully found. Successful means that there exists a path from the start lane to a lane contained in the target lane_group. If unsuccessful the shortest deepest path is returned.
+            The path, else the shortest of the deepest paths, and whether the target was reached.
         """
         start_lane = self._queue[0]
 
-        # Initial search states
         path_found: bool = False
         end_lane: Lane = start_lane
 
@@ -75,7 +70,6 @@ class Dijkstra:
             self._expanded_dist.append(dist)
             self._expanded_depth.append(current_depth)
 
-            # Populate queue
             for next_lane in current_lane.successors:
                 next_lane_id = int(next_lane.object_id)
                 if next_lane_id not in self._candidate_lane_ids:
@@ -99,7 +93,6 @@ class Dijkstra:
                         self._depth[next_lane_idx] = current_depth + 1
 
         if not path_found:
-            # filter max depth
             max_depth = max(self._expanded_depth)
             idx_max_depth = [
                 int(idx)
@@ -117,13 +110,13 @@ class Dijkstra:
     @staticmethod
     def _edge_cost(lane: Lane) -> float:
         """
-        Edge cost of given lane.
+        Computes the cost of traversing a lane.
 
         Args:
-            lane: lane class
+            lane: Lane to traverse.
 
         Returns:
-            length of lane centerline
+            The length of the lane centerline.
         """
         return lane.centerline.length
 
@@ -133,7 +126,7 @@ class Dijkstra:
         target_lane_group: LaneGroup,
     ) -> bool:
         """
-        Check if the current lane is at the target lane_group.
+        Checks whether the current lane is in the target lane group.
 
         Args:
             current_lane: The lane to check.

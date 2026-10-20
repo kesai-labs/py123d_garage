@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+# The session cache fill entry point: the schema and plan of the training run to fill, as in train, then the command line.
+defaults:
+  - schema/train
+  - training: null
+  - hydra_settings
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+  - _self_

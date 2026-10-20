@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 470" width="1600" height="470">
+  <rect x="0.0" y="0.0" width="1600.0" height="470.0" rx="24" fill="#f5f3ee" />
+  <text x="512.5" y="84.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" fill="#555555" text-anchor="middle">Context</text>
+  <path d="M288 100 L288 94 L737 94 L737 100" fill="none" stroke="#9a9a9a" stroke-width="2.5" stroke-linecap="round" />
+  <text x="977.5" y="84.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" fill="#555555" text-anchor="middle">Planning representations</text>
+  <path d="M753 100 L753 94 L1202 94 L1202 100" fill="none" stroke="#9a9a9a" stroke-width="2.5" stroke-linecap="round" />
+  <text x="357.5" y="148.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#141414" text-anchor="middle">Target points</text>
+  <text x="512.5" y="148.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#141414" text-anchor="middle">Ego speed</text>
+  <text x="667.5" y="148.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#141414" text-anchor="middle">Scene tokens</text>
+  <text x="822.5" y="148.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#141414" text-anchor="middle">Path</text>
+  <text x="977.5" y="148.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#141414" text-anchor="middle">Actions</text>
+  <text x="1132.5" y="148.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="19" font-weight="600" fill="#141414" text-anchor="middle">Waypoints</text>
+  <text x="260.0" y="148.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#555555" text-anchor="end">attends to →</text>
+  <text x="260.0" y="218.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#8a5d00" text-anchor="end">Path</text>
+  <rect x="285.0" y="175.0" width="145.0" height="70.0" rx="10" fill="#ffecb8" />
+  <text x="357.5" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#8a5d00" text-anchor="middle">✓</text>
+  <rect x="440.0" y="175.0" width="145.0" height="70.0" rx="10" fill="#ffecb8" />
+  <text x="512.5" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#8a5d00" text-anchor="middle">✓</text>
+  <rect x="595.0" y="175.0" width="145.0" height="70.0" rx="10" fill="#ffecb8" />
+  <text x="667.5" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#8a5d00" text-anchor="middle">✓</text>
+  <rect x="750.0" y="175.0" width="145.0" height="70.0" rx="10" fill="#ffecb8" />
+  <text x="822.5" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#8a5d00" text-anchor="middle">✓</text>
+  <rect x="905.0" y="175.0" width="145.0" height="70.0" rx="10" fill="#efebe3" />
+  <text x="977.5" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#9a9a9a" text-anchor="middle">✕</text>
+  <rect x="1060.0" y="175.0" width="145.0" height="70.0" rx="10" fill="#efebe3" />
+  <text x="1132.5" y="220.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#9a9a9a" text-anchor="middle">✕</text>
+  <text x="260.0" y="298.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#5c5c5c" text-anchor="end">Actions</text>
+  <rect x="285.0" y="255.0" width="145.0" height="70.0" rx="10" fill="#efebe3" />
+  <text x="357.5" y="300.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#9a9a9a" text-anchor="middle">✕</text>
+  <rect x="440.0" y="255.0" width="145.0" height="70.0" rx="10" fill="#e8e8e8" />
+  <text x="512.5" y="300.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#5c5c5c" text-anchor="middle">✓</text>
+  <rect x="595.0" y="255.0" width="145.0" height="70.0" rx="10" fill="#e8e8e8" />
+  <text x="667.5" y="300.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#5c5c5c" text-anchor="middle">✓</text>
+  <rect x="750.0" y="255.0" width="145.0" height="70.0" rx="10" fill="#e8e8e8" />
+  <text x="822.5" y="300.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#5c5c5c" text-anchor="middle">✓</text>
+  <rect x="905.0" y="255.0" width="145.0" height="70.0" rx="10" fill="#e8e8e8" />
+  <text x="977.5" y="300.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#5c5c5c" text-anchor="middle">✓</text>
+  <rect x="1060.0" y="255.0" width="145.0" height="70.0" rx="10" fill="#e8e8e8" />
+  <text x="1132.5" y="300.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#5c5c5c" text-anchor="middle">✓</text>
+  <text x="260.0" y="378.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#141414" text-anchor="end">Waypoints</text>
+  <rect x="285.0" y="335.0" width="145.0" height="70.0" rx="10" fill="#efebe3" />
+  <text x="357.5" y="380.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#9a9a9a" text-anchor="middle">✕</text>
+  <rect x="440.0" y="335.0" width="145.0" height="70.0" rx="10" fill="#dcdcdc" />
+  <text x="512.5" y="380.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#141414" text-anchor="middle">✓</text>
+  <rect x="595.0" y="335.0" width="145.0" height="70.0" rx="10" fill="#dcdcdc" />
+  <text x="667.5" y="380.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#141414" text-anchor="middle">✓</text>
+  <rect x="750.0" y="335.0" width="145.0" height="70.0" rx="10" fill="#dcdcdc" />
+  <text x="822.5" y="380.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#141414" text-anchor="middle">✓</text>
+  <rect x="905.0" y="335.0" width="145.0" height="70.0" rx="10" fill="#dcdcdc" />
+  <text x="977.5" y="380.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#141414" text-anchor="middle">✓</text>
+  <rect x="1060.0" y="335.0" width="145.0" height="70.0" rx="10" fill="#dcdcdc" />
+  <text x="1132.5" y="380.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="28" font-weight="700" fill="#141414" text-anchor="middle">✓</text>
+  <path d="M1250 180 L1258 180 L1258 240 L1250 240" fill="none" stroke="#8a5d00" stroke-width="3" stroke-linecap="round" />
+  <text x="1276.0" y="218.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#8a5d00" text-anchor="start">Geometry</text>
+  <path d="M1250 260 L1258 260 L1258 400 L1250 400" fill="none" stroke="#141414" stroke-width="3" stroke-linecap="round" />
+  <text x="1276.0" y="338.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="start">Speed</text>
+  <text x="285.0" y="454.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="400" fill="#555555" text-anchor="start">With masking on. Without it, every cell is ✓.</text>
+</svg>

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Aligning every recorded stream to one reference clock: the past grid, and the nearest-in-tolerance reads."""
 
 from __future__ import annotations
@@ -56,13 +59,7 @@ def _sample_past_stream(
     stream_description: str,
 ) -> list[SampleT | None]:
     """
-    Serves one recorded sample per past offset, or None where the stream had not started.
-
-    A stream records on its own clock, so a target rarely lands on a recorded sample; the
-    nearest one within the tolerance serves it. A target that misses while the stream was
-    already recording is a dropout and raises, whereas a target before the stream's first
-    sample is simply too early: near the start of a log or an episode there is nothing to
-    serve, and the caller decides whether to skip it or repeat a neighbour.
+    Serves the nearest recorded sample within tolerance per past offset, or None where the stream had not started.
 
     Args:
         fetch: returns the recorded sample matching a timestamp under a search criteria

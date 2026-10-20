@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+"""Scores a policy's open-loop displacement errors on offline data sources."""
+
 from __future__ import annotations
 
 import faulthandler
@@ -24,16 +29,19 @@ from py123d_garage.common.config_help import (
     save_config,
 )
 from py123d_garage.common.logging_setup import setup_logging
-from py123d_garage.config.presets.python.offline_data_sources.navsim import navtest
+from py123d_garage.config.presets.offline_data_sources.navsim import navtest
 from py123d_garage.config.schema.evaluation.open_loop_config import OpenLoopBenchmarkConfig
 from py123d_garage.config.schema.evaluation.parallel_offline_evaluation_config import ParallelizationConfig
+from py123d_garage.datatypes.numerics import PositiveInt
 from py123d_garage.datatypes.trajectory import TrajectorySE2
 from py123d_garage.evaluation.help import (
     build_source_scenes,
+    expected_num_scenes,
     merge_results_if_last_shard,
     run_shard_inference,
     save_shard_results,
 )
+from py123d_garage.evaluation.help.policy_building import build_evaluation_policy
 from py123d_garage.py123d_help.scene_builders import VerboseProcessPoolExecutor
 from py123d_garage.py123d_help.scene_readers.ego_state import sample_ego_se2
 
@@ -45,31 +53,26 @@ register_schema("evaluate_open_loop", OpenLoopBenchmarkConfig)
 
 @hydra.main(config_path=str(CONFIG_PATH), config_name="evaluate_open_loop", version_base=None)
 def main(cfg: DictConfig) -> None:
-    # Setup logging
     setup_logging()
 
     # Print the C-level stack trace when a worker dies on a fatal signal.
     faulthandler.enable()
 
-    # Compose the benchmark config from the Hydra config and command line overrides.
     benchmark_config: OpenLoopBenchmarkConfig = finalize_evaluation(cfg, OpenLoopBenchmarkConfig, hydra_overrides())
     output_dir = run_dir()
 
-    # Build the policy from the config
     py123d_garage_policy = cast(
         AnyPolicy,
         build_from_string(benchmark_config.policy_config, AbstractPolicy),
     )
 
-    # Evaluate default on the navtest source if no sources are provided,
-    # so the entry point can be run without any config.
+    # Falls back to navtest so the entry point runs without any config.
     if not benchmark_config.benchmark_offline_data_sources:
         benchmark_config = replace(
             benchmark_config,
-            benchmark_offline_data_sources={"navtest": navtest(py123d_garage_policy.policy_config)},
+            benchmark_offline_data_sources=[navtest(py123d_garage_policy.policy_config, benchmark_config)],
         )
 
-    # Sanity check sharding config
     parallelization: ParallelizationConfig = benchmark_config.parallelization_config
     if not 0 <= parallelization.shard_index < parallelization.num_shards:
         raise ValueError(
@@ -83,16 +86,7 @@ def main(cfg: DictConfig) -> None:
         f"Path where all results are stored: {output_dir!s}",
     )
 
-    # Verify the policy's config is compatible with the benchmark's sources.
     py123d_garage_policy.verify_contract(benchmark_config=benchmark_config)
-    scored_horizon_us = py123d_garage_policy.policy_config.trajectory_horizon_us
-    for scored_source in benchmark_config.benchmark_offline_data_sources.values():
-        declared_s = scored_source.garage_scene_filter.future_duration_s
-        if declared_s is None or round(declared_s * 1e6) < scored_horizon_us:
-            raise ValueError(
-                f"the source at '{scored_source.data_root}' authors future_duration_s={declared_s} "
-                f"but the errors cover {scored_horizon_us} µs past each anchor.",
-            )
 
     max_workers = parallelization.max_workers
     if max_workers is None:
@@ -100,29 +94,24 @@ def main(cfg: DictConfig) -> None:
         max_workers = len(os.sched_getaffinity(0))
     executor = VerboseProcessPoolExecutor(max_workers=max_workers)
 
-    # Un-initialized copy for the loader workers.
-    # This policy object does not have Torch tensors on the device, and is not used for inference.
+    # An un-initialized copy, with no weights on the device, builds the features in the loader workers.
     py123d_garage_feature_policy = cast(
         AnyPolicy,
         build_from_string(benchmark_config.policy_config, AbstractPolicy),
     )
 
-    # Initialize the inference policy's weight and move it to the device, so the workers can use it for inference.
-    py123d_garage_policy.initialize(
-        benchmark_config.policy_config.evaluation_checkpoint_file,
-    )
+    py123d_garage_policy = build_evaluation_policy(benchmark_config.policy_config)
     py123d_garage_policy.to(parallelization.device)
 
-    # Run the inferences and score the results, one shard at a time.
-    # Each worker loads its own scenes and runs inference on them.
     results: list[dict[str, object]] = []
-    for source in benchmark_config.benchmark_offline_data_sources.values():
+    for source in benchmark_config.benchmark_offline_data_sources:
         scenes = build_source_scenes(
             source,
             parallelization.shard_index,
             parallelization.num_shards,
             executor,
             py123d_garage_policy,
+            benchmark_config,
         )
         LOG.info("Running Inference")
         trajectories = run_shard_inference(
@@ -137,12 +126,12 @@ def main(cfg: DictConfig) -> None:
         LOG.info("Running Scoring")
         results.extend(_score_scenes(scenes, trajectories, py123d_garage_policy.policy_config))
 
-    # Save the shard's results and merge them if this is the last shard to finish.
     save_shard_results(results, str(output_dir), parallelization.shard_index)
     merge_results_if_last_shard(
         str(output_dir),
         parallelization.num_shards,
         parallelization.shard_index,
+        expected_num_scenes(benchmark_config.benchmark_offline_data_sources),
     )
 
 
@@ -170,8 +159,7 @@ def _score_scenes(
                 _compute_displacement_errors(
                     scene,
                     trajectory,
-                    policy_config.trajectory_num_steps,
-                    policy_config.trajectory_interval_us,
+                    policy_config.trajectory_offsets_us,
                 ),
             )
         except Exception as error:
@@ -186,8 +174,7 @@ def _score_scenes(
 def _compute_displacement_errors(
     scene: SceneAPI,
     trajectory: TrajectorySE2,
-    num_steps: int,
-    interval_us: int,
+    offsets_us: list[PositiveInt],
 ) -> dict[str, float]:
     """
     Compares one predicted trajectory against the logged ego poses on the scoring grid.
@@ -195,23 +182,19 @@ def _compute_displacement_errors(
     Args:
         scene: the scene the trajectory was predicted for, anchored at its current frame.
         trajectory: the predicted trajectory, relative to the anchor ego pose.
-        num_steps: how many poses the scoring grid holds.
-        interval_us: spacing of the scoring grid.
+        offsets_us: times past the anchor the scoring grid holds a pose at.
 
     Returns:
         the average and the final displacement error, in meters.
     """
     ground_truth = sample_ego_se2(
         scene_api=scene,
-        num_steps=num_steps,
-        interval_us=interval_us,
+        offsets_us=offsets_us,
         relative_to_anchor=True,
     )
     ego_state_se3 = scene.get_ego_state_se3_at_iteration(0)
     assert ego_state_se3 is not None, "Ego state should be available for displacement scoring!"
-    # The prediction's first pose sits one policy step past the anchor, so a finer
-    # scoring grid would query before it; in its own frame the ego is at the origin
-    # at the anchor, and prepending that pose makes the whole grid interpolable.
+    # The first predicted pose is one policy step past the anchor; prepending the anchor origin covers finer grids.
     anchored_prediction = TrajectorySE2(
         pose_se2_array=np.vstack(
             [np.zeros((1, len(PoseSE2Index)), dtype=np.float64), trajectory.pose_se2_array],

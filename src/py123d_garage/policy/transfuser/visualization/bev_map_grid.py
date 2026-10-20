@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Debug grid of the raw CenterNet and BEV-semantic label and prediction rasters."""
 
 from __future__ import annotations
@@ -31,10 +34,7 @@ def render_bev_maps(
     bev_semantic_classes: jt.Int[torch.Tensor, "batch bev_height bev_width"] | None = None,
 ) -> jt.UInt8[npt.NDArray[np.uint8], "height width 3"]:
     """
-    Renders the raw BEV-map rasters of the first sample as a titled grid.
-
-    Label and prediction panels of the same head sit next to each other; heads
-    without tensors in the bundles are skipped.
+    Renders the raw BEV-map rasters of the first sample as a titled grid, label next to prediction per head.
 
     Args:
         features: batched feature bundle, as consumed by the policy's forward
@@ -50,6 +50,15 @@ def render_bev_maps(
     def raster(
         tensor: torch.Tensor | None,
     ) -> npt.NDArray[np.float32] | None:
+        """
+        Converts the first sample of a batched tensor to a float32 array.
+
+        Args:
+            tensor: batched tensor, or None.
+
+        Returns:
+            the first sample as a float32 array, or None when the input is None.
+        """
         if tensor is None:
             return None
         return cast(
@@ -60,21 +69,57 @@ def render_bev_maps(
     def channel_norm(
         array: npt.NDArray[np.float32] | None,
     ) -> npt.NDArray[np.float32] | None:
+        """
+        Reduces a channel-first raster to the per-pixel norm over its channels.
+
+        Args:
+            array: channel-first raster, or None.
+
+        Returns:
+            the per-pixel channel norm, or None when the input is None.
+        """
         return None if array is None else np.linalg.norm(array, axis=0)
 
     def first_channel(
         array: npt.NDArray[np.float32] | None,
     ) -> npt.NDArray[np.float32] | None:
+        """
+        Selects the first channel of a channel-first raster.
+
+        Args:
+            array: channel-first raster, or None.
+
+        Returns:
+            the first channel, or None when the input is None.
+        """
         return None if array is None else array[0]
 
     def argmax_channel(
         array: npt.NDArray[np.float32] | None,
     ) -> npt.NDArray[np.float32] | None:
+        """
+        Reduces a channel-first raster to the per-pixel index of its largest channel.
+
+        Args:
+            array: channel-first raster, or None.
+
+        Returns:
+            the per-pixel argmax channel index as float32, or None when the input is None.
+        """
         return None if array is None else array.argmax(0).astype(np.float32)
 
     def max_channel(
         array: npt.NDArray[np.float32] | None,
     ) -> npt.NDArray[np.float32] | None:
+        """
+        Reduces a channel-first raster to the per-pixel maximum over its channels.
+
+        Args:
+            array: channel-first raster, or None.
+
+        Returns:
+            the per-pixel channel maximum, or None when the input is None.
+        """
         return None if array is None else array.max(0)
 
     center_net = labels.center_net
@@ -162,7 +207,16 @@ def _render_panel(
     title: str,
     raster: jt.Float32[npt.NDArray[np.float32], "height width"],
 ) -> jt.UInt8[npt.NDArray[np.uint8], "panel_height panel_width 3"]:
-    """One titled, colormapped panel in display orientation."""
+    """
+    Renders one titled, colormapped panel in display orientation.
+
+    Args:
+        title: the panel title.
+        raster: the raster to show, min-max normalized for the colormap.
+
+    Returns:
+        the RGB panel.
+    """
     display = np.ascontiguousarray(to_display(raster)).astype(np.float32)
     low, high = float(display.min()), float(display.max())
     normalized = (display - low) / (high - low) if high > low else display * 0.0
@@ -198,7 +252,15 @@ def _render_panel(
 def _tile_panels(
     panels: list[jt.UInt8[npt.NDArray[np.uint8], "panel_height panel_width 3"]],
 ) -> jt.UInt8[npt.NDArray[np.uint8], "height width 3"]:
-    """Arranges equally sized panels into a bordered grid."""
+    """
+    Arranges equally sized panels into a bordered grid.
+
+    Args:
+        panels: the RGB panels, in row-major order.
+
+    Returns:
+        the RGB grid image.
+    """
     panel_height, panel_width = panels[0].shape[:2]
     rows = -(-len(panels) // _GRID_COLUMNS)
     height = rows * panel_height + (rows + 1) * _BORDER_PIXEL

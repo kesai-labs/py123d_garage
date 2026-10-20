@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 import faulthandler
@@ -22,16 +25,18 @@ from py123d_garage.common.config_help import (
     save_config,
 )
 from py123d_garage.common.logging_setup import setup_logging
-from py123d_garage.config.presets.python.offline_data_sources.navsim import navtest
+from py123d_garage.config.presets.offline_data_sources.navsim import navtest
 from py123d_garage.config.schema.evaluation.navsim_config import NavsimBenchmarkConfig
 from py123d_garage.config.schema.evaluation.parallel_offline_evaluation_config import ParallelizationConfig
 from py123d_garage.datatypes.trajectory import TrajectorySE2
 from py123d_garage.evaluation.help import (
     build_source_scenes,
+    expected_num_scenes,
     merge_results_if_last_shard,
     run_shard_inference,
     save_shard_results,
 )
+from py123d_garage.evaluation.help.policy_building import build_evaluation_policy
 from py123d_garage.evaluation.navsim.help.pdm_metric import PDMMetric
 from py123d_garage.py123d_help.scene_builders import VerboseProcessPoolExecutor
 
@@ -56,7 +61,7 @@ def main(cfg: DictConfig) -> None:
     if not benchmark_config.benchmark_offline_data_sources:
         benchmark_config = replace(
             benchmark_config,
-            benchmark_offline_data_sources={"navtest": navtest(py123d_garage_policy.policy_config)},
+            benchmark_offline_data_sources=[navtest(py123d_garage_policy.policy_config, benchmark_config)],
         )
     parallelization: ParallelizationConfig = benchmark_config.parallelization_config
     if not 0 <= parallelization.shard_index < parallelization.num_shards:
@@ -71,13 +76,6 @@ def main(cfg: DictConfig) -> None:
     )
 
     py123d_garage_policy.verify_contract(benchmark_config=benchmark_config)
-    for scored_source in benchmark_config.benchmark_offline_data_sources.values():
-        declared_s = scored_source.garage_scene_filter.future_duration_s
-        if declared_s is None or round(declared_s * 1e6) < benchmark_config.navsim_scoring_future_duration_us:
-            raise ValueError(
-                f"the source at '{scored_source.data_root}' authors future_duration_s={declared_s} "
-                f"but navsim scores {benchmark_config.navsim_scoring_future_duration_us} µs past each anchor.",
-            )
 
     max_workers = parallelization.max_workers
     if max_workers is None:
@@ -90,19 +88,18 @@ def main(cfg: DictConfig) -> None:
         AnyPolicy,
         build_from_string(benchmark_config.policy_config, AbstractPolicy),
     )
-    py123d_garage_policy.initialize(
-        benchmark_config.policy_config.evaluation_checkpoint_file,
-    )
+    py123d_garage_policy = build_evaluation_policy(benchmark_config.policy_config)
     py123d_garage_policy.to(parallelization.device)
 
     results: list[dict[str, object]] = []
-    for source in benchmark_config.benchmark_offline_data_sources.values():
+    for source in benchmark_config.benchmark_offline_data_sources:
         scenes = build_source_scenes(
             source,
             parallelization.shard_index,
             parallelization.num_shards,
             executor,
             py123d_garage_policy,
+            benchmark_config,
         )
         LOG.info("Running Inference")
         trajectories = run_shard_inference(
@@ -113,6 +110,7 @@ def main(cfg: DictConfig) -> None:
             parallelization.inference_batch_size,
             max_workers,
             output_dir / "visualizations" if benchmark_config.save_visualizations else None,
+            nan_past_route_end=not benchmark_config.scored_scene_needs_route,
         )
         LOG.info("Running Scoring")
         results.extend(
@@ -132,12 +130,17 @@ def main(cfg: DictConfig) -> None:
         str(output_dir),
         parallelization.num_shards,
         parallelization.shard_index,
+        expected_num_scenes(benchmark_config.benchmark_offline_data_sources),
     )
 
 
 @dataclass(frozen=True)
 class _SceneTrajectoryPair:
+    """A scene and the policy trajectory to score on it."""
+
+    # Scene to score.
     scene: SceneAPI
+    # Trajectory the policy planned for the scene.
     trajectory: TrajectorySE2
 
 
@@ -145,11 +148,15 @@ def _score_scenes(
     scene_trajectory_pairs: list[_SceneTrajectoryPair],
 ) -> list[dict[str, object]]:
     """
-    Runs the PDM metric for a chunk of scene-trajectory pairs. Built per worker.
+    Scores a chunk of scene-trajectory pairs with the PDM metric.
 
-    A scene the metric cannot score keeps its row with the error and no metric
-    values: one unscorable scene must not abort a shard of thousands, and the
-    empty values drop out of the average instead of biasing it.
+    An unscorable scene keeps its row with the error and no metric values; the merge fails the run on it.
+
+    Args:
+        scene_trajectory_pairs: Scenes and the trajectories to score on them.
+
+    Returns:
+        One result row per pair.
     """
     metric = PDMMetric()
     results: list[dict[str, object]] = []

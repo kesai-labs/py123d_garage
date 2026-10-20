@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Reads sensors, ego states and routes out of a py123d scene."""
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from py123d_garage.py123d_help.scene_readers.synchronization import (
 )
 from py123d_garage.py123d_help.scene_readers.target_points import (
     InsufficientRouteError,
+    get_target_point_poses,
     get_target_points,
 )
 
@@ -34,6 +38,7 @@ __all__ = [
     "TimestampedSample",
     "accumulate_lidar_in_anchor_frame",
     "camera_at_anchor",
+    "get_target_point_poses",
     "get_target_points",
     "interpolate_ego_se2_at",
     "lidar_at_anchor",

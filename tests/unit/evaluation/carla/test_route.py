@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for the route polyline the CARLA agent conditions a policy on."""
 
 from __future__ import annotations

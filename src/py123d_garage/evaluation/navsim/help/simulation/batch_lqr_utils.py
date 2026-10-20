@@ -11,12 +11,9 @@ import numpy as np
 import numpy.typing as npt
 from py123d.geometry.utils.rotation_utils import normalize_angle
 
-# Util functions for BatchLQRTracker
-# Code re-written based on nuPlan's implementation:
-# https://github.com/motional/nuplan-devkit
+# Re-written from nuPlan's implementation: https://github.com/motional/nuplan-devkit
 
-# Default regularization weight for initial curvature fit.  Users shouldn't really need to modify this,
-# we just want it positive and small for improved conditioning of the associated least squares problem.
+# Small positive weight on the initial curvature that keeps the curvature least squares problem well conditioned.
 INITIAL_CURVATURE_PENALTY = 1e-10
 
 
@@ -43,8 +40,7 @@ def _generate_profile_from_initial_condition_and_derivatives(
     discretization_time: float,
 ) -> jt.Float64[npt.NDArray[np.float64], "batch profile"]:
     """
-    Returns the corresponding profile (i.e. trajectory) given an initial condition and derivatives at
-    multiple timesteps by integration.
+    Integrates derivatives from an initial condition into a profile.
 
     Args:
         initial_condition: The value of the variable at the initial timestep.
@@ -73,16 +69,15 @@ def _get_xy_heading_displacements_from_poses(
     Returns position and heading displacements given a pose trajectory.
 
     Args:
-        poses: <np.ndarray: num_poses, 3> A trajectory of poses (x, y, heading).
+        poses: Trajectories of poses (x, y, heading).
 
     Returns:
-        Tuple of xy displacements with shape (num_poses-1, 2) and heading displacements with shape (num_poses-1,).
+        The xy displacements and the heading displacements between consecutive poses.
     """
     assert len(poses.shape) == 3, "Expect a 2D matrix representing a trajectory of poses."
     assert poses.shape[1] > 1, "Cannot get displacements given an empty or single element pose trajectory."
     assert poses.shape[2] == 3, "Expect pose to have three elements (x, y, heading)."
 
-    # Compute displacements that are used to complete the kinematic state and input.
     pose_differences = np.diff(poses, axis=1)  # (b, num_poses-1, 3)
     xy_displacements = pose_differences[..., :2]
     heading_displacements = normalize_angle(pose_differences[..., 2])
@@ -130,10 +125,10 @@ def _fit_initial_velocity_and_acceleration_profile(
         xy_displacements: [m] Deviations in x and y occurring between M+1 poses, a M by 2 matrix.
         heading_profile: [rad] Headings associated to the starting timestamp for xy_displacements, a M-length vector.
         discretization_time: [s] Time discretization used for integration.
-        jerk_penalty: A regularization parameter used to penalize acceleration differences.  Should be positive.
+        jerk_penalty: Positive weight penalizing acceleration differences.
 
     Returns:
-        Least squares solution for initial velocity (v_0) and acceleration profile ({a_0, ..., a_M-1}) for M displacement values.
+        The initial velocity and the M - 1 accelerations.
     """
     assert discretization_time > 0.0, "Discretization time must be positive."
     assert jerk_penalty > 0, "Should have a positive jerk_penalty."
@@ -170,9 +165,7 @@ def _fit_initial_velocity_and_acceleration_profile(
     upper_triangle_mask = np.repeat(upper_triangle_mask, 2, axis=0)
     A[:, upper_triangle_mask] = 0.0
 
-    # Regularization using jerk penalty, i.e. difference of acceleration values.
-    # If there are M displacements, then we have M - 1 acceleration values.
-    # That means we have M - 2 jerk values, thus we make a banded difference matrix of that size.
+    # M displacements give M - 1 accelerations and so M - 2 jerk values.
     banded_matrix = _make_banded_difference_matrix(num_displacements - 2)
     R: npt.NDArray[np.float64] = np.block(
         [np.zeros((len(banded_matrix), 1)), banded_matrix],
@@ -181,10 +174,7 @@ def _fit_initial_velocity_and_acceleration_profile(
 
     A_T, R_T = np.transpose(A, (0, 2, 1)), np.transpose(R, (0, 2, 1))
 
-    # Regularized least squares: solve (A^T A + λ R^T R) x = A^T y.
-    # The LHS is SPD by construction, so np.linalg.solve is both faster and
-    # numerically better behaved than pinv (which uses SVD and can fail to
-    # converge on degenerate inputs).
+    # Regularized least squares (A^T A + λ R^T R) x = A^T y; the LHS is SPD, so solve is safer than pinv.
     lhs_matrix = batch_matmul(A_T, A) + jerk_penalty * batch_matmul(R_T, R)
     rhs_vector: npt.NDArray[np.float64] = np.einsum("bij,bj->bi", A_T, y)
     x = cast(
@@ -192,7 +182,6 @@ def _fit_initial_velocity_and_acceleration_profile(
         np.linalg.solve(lhs_matrix, rhs_vector[..., None])[..., 0],
     )
 
-    # Extract profile from solution.
     initial_velocity = x[:, 0]
     acceleration_profile = x[:, 1:]
 
@@ -216,18 +205,17 @@ def _fit_initial_curvature_and_curvature_rate_profile(
     jt.Float64[npt.NDArray[np.float64], "batch curvature_rates"],
 ]:
     """
-    Estimates initial curvature (curvature_0) and curvature rate ({curvature_rate_0, ...})
-    using least squares with curvature rate regularization.
+    Estimates initial curvature and curvature rates by least squares with curvature rate regularization.
 
     Args:
         heading_displacements: [rad] Angular deviations in heading occurring between timesteps.
         velocity_profile: [m/s] Estimated or actual velocities at the timesteps matching displacements.
         discretization_time: [s] Time discretization used for integration.
-        curvature_rate_penalty: A regularization parameter used to penalize curvature_rate.  Should be positive.
-        initial_curvature_penalty: A regularization parameter to handle zero initial speed.  Should be positive and small.
+        curvature_rate_penalty: Positive weight penalizing the curvature rate.
+        initial_curvature_penalty: Small positive weight on the initial curvature, for zero initial speed.
 
     Returns:
-        Least squares solution for initial curvature (curvature_0) and curvature rate profile (curvature_rate_0, ..., curvature_rate_{M-1}) for M heading displacement values.
+        The initial curvature and the curvature rates.
     """
     assert discretization_time > 0.0, "Discretization time must be positive."
     assert curvature_rate_penalty > 0.0, "Should have a positive curvature_rate_penalty."
@@ -248,15 +236,11 @@ def _fit_initial_curvature_and_curvature_rate_profile(
     velocity = velocity_profile * discretization_time**2
     A[:, 1:, 1:] *= velocity[:, None, 1:].transpose(0, 2, 1)
 
-    # Regularization on curvature rate.  We add a small but nonzero weight on initial curvature too.
-    # This is since the corresponding row of the A matrix might be zero if initial speed is 0, leading to singularity.
-    # We guarantee that Q is positive definite such that the minimizer of the least squares problem is unique.
+    # The initial curvature weight keeps Q positive definite, as its row of A is zero at zero initial speed.
     Q: npt.NDArray[np.float64] = curvature_rate_penalty * np.eye(dim)
     Q[0, 0] = initial_curvature_penalty
 
-    # Regularized least squares: solve (A^T A + Q) x = A^T y.
-    # The LHS is SPD by construction, so np.linalg.solve is both faster and
-    # numerically better behaved than pinv.
+    # Regularized least squares (A^T A + Q) x = A^T y; the LHS is SPD, so solve is safer than pinv.
     A_T = A.transpose(0, 2, 1)
     lhs_matrix = batch_matmul(A_T, A) + Q
     rhs_vector: npt.NDArray[np.float64] = np.einsum("bij,bj->bi", A_T, y)
@@ -265,7 +249,6 @@ def _fit_initial_curvature_and_curvature_rate_profile(
         np.linalg.solve(lhs_matrix, rhs_vector[..., None])[..., 0],
     )
 
-    # Extract profile from solution.
     initial_curvature = x[:, 0]
     curvature_rate_profile = x[:, 1:]
 
@@ -284,14 +267,13 @@ def get_velocity_curvature_profiles_with_derivatives_from_poses(
     jt.Float64[npt.NDArray[np.float64], "batch accels"],
 ]:
     """
-    Main function for joint estimation of velocity, acceleration, curvature, and curvature rate given N poses
-    sampled at discretization_time. This is done by solving two least squares problems with the given penalty weights.
+    Fits velocity, acceleration, curvature and curvature rate profiles to poses with two least squares problems.
 
     Args:
         discretization_time: [s] Time discretization used for integration.
-        poses: <np.ndarray: num_poses, 3> A trajectory of N poses (x, y, heading).
-        jerk_penalty: A regularization parameter used to penalize acceleration differences.  Should be positive.
-        curvature_rate_penalty: A regularization parameter used to penalize curvature_rate.  Should be positive.
+        poses: Trajectories of N poses (x, y, heading).
+        jerk_penalty: Positive weight penalizing acceleration differences.
+        curvature_rate_penalty: Positive weight penalizing the curvature rate.
 
     Returns:
         Profiles for velocity (N-1), acceleration (N-2), curvature (N-1), and curvature rate (N-2).
@@ -314,7 +296,6 @@ def get_velocity_curvature_profiles_with_derivatives_from_poses(
         discretization_time=discretization_time,
     )
 
-    # Compute initial curvature + curvature rate least squares solution and extract results.  It relies on velocity fit.
     (
         initial_curvature,
         curvature_rate_profile,

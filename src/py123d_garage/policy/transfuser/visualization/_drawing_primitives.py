@@ -1,24 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Low-level drawing primitives shared by the TransFuser visualization views."""
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
-from typing import Any, cast, overload
+from typing import Any, overload
 
 import cv2
 import jaxtyping as jt
 import numpy as np
 import numpy.typing as npt
-import torch
 
 from py123d_garage.config.schema.policy.transfuser_config import (
     TransfuserConfig,
 )
 from py123d_garage.config.schema.policy.visualization_config import TrajectoryStyleConfig
-from py123d_garage.datatypes.trajectory import derive_yaw_from_positions
-
-TRAJECTORY_HEADING_ARROW_M = 3.0
 
 
 @overload
@@ -32,12 +30,30 @@ def to_display(raster: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]: ...
 
 
 def to_display(raster: Any) -> Any:
-    """Raster [row=y, col=x] → display image with x (forward) up and y (left) on the left."""
+    """
+    Turns a raster indexed [row=y, col=x] into a display image with x (forward) up and y (left) on the left.
+
+    Args:
+        raster: the raster, optionally with a trailing channel axis.
+
+    Returns:
+        the raster in display orientation.
+    """
     return np.transpose(raster, (1, 0, 2))[::-1, ::-1] if raster.ndim == 3 else raster.T[::-1, ::-1]
 
 
 def to_pixel(x: float, y: float, config: TransfuserConfig) -> tuple[int, int]:
-    """Ego-frame (x, y) in meters → display (column, row)."""
+    """
+    Maps an ego-frame position to display pixel coordinates.
+
+    Args:
+        x: forward position in meters.
+        y: leftward position in meters.
+        config: TransFuser config whose BEV grid sets the mapping.
+
+    Returns:
+        the display (column, row).
+    """
     col = (
         config.lidar_config.bev_height_pixel
         - 1
@@ -61,7 +77,18 @@ def blend_semantic_overlay(
     mask: jt.Bool[npt.NDArray[np.bool_], "height width"],
     alpha: float,
 ) -> jt.UInt8[npt.NDArray[np.uint8], "height width 3"]:
-    """Alpha-blends the overlay onto the base image where the mask is set."""
+    """
+    Alpha-blends the overlay onto the base image where the mask is set.
+
+    Args:
+        base: the image to blend onto.
+        overlay: the image to blend in.
+        mask: the pixels to blend.
+        alpha: the overlay's weight.
+
+    Returns:
+        the blended image.
+    """
     blended = base.astype(np.float32)
     blended[mask] = alpha * overlay[mask].astype(np.float32) + (1.0 - alpha) * blended[mask]
     return blended.astype(np.uint8)
@@ -74,7 +101,16 @@ def draw_polyline(
     config: TransfuserConfig,
     thickness: int,
 ) -> None:
-    """Draws an ego-frame polyline as a connected line; cv2 clips off-image parts."""
+    """
+    Draws an ego-frame polyline as a connected line in place; cv2 clips off-image parts.
+
+    Args:
+        image: the display image to draw on.
+        points: the polyline points, (x, y) in the first two columns.
+        color: RGB line color.
+        config: TransFuser config whose BEV grid sets the mapping.
+        thickness: line thickness in pixels.
+    """
     if len(points) < 2:
         return
     pixels = np.array(
@@ -98,12 +134,14 @@ def draw_trajectory(
     config: TransfuserConfig,
 ) -> None:
     """
-    Draws an ego-frame trajectory as a connected line, a dot per pose and a heading arrow.
+    Draws an ego-frame trajectory as a dot per pose in place.
 
-    The arrow shows the yaw the benchmarks will use: the trajectory carries positions only,
-    so the heading is derived from the path exactly as TrajectoryXY.to_se2 derives it.
+    Args:
+        image: the display image to draw on.
+        poses: the trajectory poses, (x, y) in the first two columns.
+        trajectory_style: dot color and radius.
+        config: TransFuser config whose BEV grid sets the mapping.
     """
-    draw_polyline(image, poses, trajectory_style.color_rgb, config, trajectory_style.line_thickness_pixel)
     for x, y in poses[:, :2]:
         cv2.circle(
             image,
@@ -113,41 +151,32 @@ def draw_trajectory(
             -1,
             lineType=cv2.LINE_AA,
         )
-    draw_trajectory_headings(image, poses, trajectory_style.color_rgb, config)
 
 
-def draw_trajectory_headings(
+def draw_path(
     image: jt.UInt8[npt.NDArray[np.uint8], "height width 3"],
-    poses: jt.Float32[npt.NDArray[np.float32], "num_poses dims"],
-    color: Sequence[int],
+    points: jt.Float32[npt.NDArray[np.float32], "num_points dims"],
+    path_style: TrajectoryStyleConfig,
     config: TransfuserConfig,
 ) -> None:
-    """Draws one arrow per pose along its heading, derived from the path when absent."""
-    if len(poses) == 0:
-        return
-    if poses.shape[-1] > 2:
-        yaw_wrapped_rad = poses[:, 2].astype(np.float64)
-    else:
-        yaw_wrapped_rad = cast(
-            npt.NDArray[np.float64],
-            derive_yaw_from_positions(
-                torch.from_numpy(poses[:, :2].astype(np.float64)),  # pyright: ignore[reportUnknownMemberType]
-            )
-            .numpy()  # pyright: ignore[reportUnknownMemberType]
-            .astype(np.float64),
-        )
+    """
+    Draws ego-frame path points in place as a connected line with a dot per point.
 
-    for (x, y), yaw in zip(poses[:, :2], yaw_wrapped_rad, strict=True):
-        tip_x = float(x) + TRAJECTORY_HEADING_ARROW_M * math.cos(float(yaw))
-        tip_y = float(y) + TRAJECTORY_HEADING_ARROW_M * math.sin(float(yaw))
-        cv2.arrowedLine(
+    Args:
+        image: the display image to draw on.
+        points: the path points, (x, y) in the first two columns.
+        path_style: line and dot color, thickness and radius.
+        config: TransFuser config whose BEV grid sets the mapping.
+    """
+    draw_polyline(image, points, path_style.color_rgb, config, path_style.line_thickness_pixel)
+    for x, y in points[:, :2]:
+        cv2.circle(
             image,
             to_pixel(float(x), float(y), config),
-            to_pixel(tip_x, tip_y, config),
-            color,
-            1,
-            line_type=cv2.LINE_AA,
-            tipLength=0.35,
+            path_style.pose_radius_pixel,
+            path_style.color_rgb,
+            -1,
+            lineType=cv2.LINE_AA,
         )
 
 
@@ -158,10 +187,13 @@ def draw_target_point(
     config: TransfuserConfig,
 ) -> None:
     """
-    Draws a target point as a filled circle; points outside the raster are clamped to its edge.
+    Draws a target point as a crossed circle, or off the raster as a circle on its edge with its distance.
 
-    An off-raster point is projected onto the BEV boundary along the ego→point
-    ray, drawn as an outline and annotated with its true distance.
+    Args:
+        image: the display image to draw on.
+        x: forward position in meters; NaN draws nothing.
+        y: leftward position in meters; NaN draws nothing.
+        config: TransFuser config whose BEV grid and colors are used.
     """
     if np.isnan(x) or np.isnan(y):
         return
@@ -185,10 +217,20 @@ def draw_target_point(
         (col, row),
         visualization_config.target_point_radius_pixel,
         visualization_config.target_point_color_rgb,
-        -1 if inside else 1,
+        1,
         lineType=cv2.LINE_AA,
     )
-    if not inside:
+    if inside:
+        cv2.drawMarker(
+            image,
+            (col, row),
+            visualization_config.target_point_color_rgb,
+            cv2.MARKER_CROSS,
+            2 * visualization_config.target_point_radius_pixel,
+            1,
+            cv2.LINE_AA,
+        )
+    else:
         distance = float(np.hypot(x, y))
         text_col = int(np.clip(col, 2, image.shape[1] - 45))
         text_row = int(np.clip(row, 14, image.shape[0] - 4))

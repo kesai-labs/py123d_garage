@@ -1,4 +1,10 @@
-"""BEV semantic loss and metrics: a map-less sample's non-box pixels may be background or any map class."""
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+"""
+BEV semantic loss and metrics: a map-less sample's non-box pixels may be background or any map class, an unannotated
+sample's pixels any box class, and a sample with neither adds no loss.
+"""
 
 from __future__ import annotations
 
@@ -8,11 +14,12 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from py123d_garage.api.abstract_policy_config import uniform_offsets_us
 from py123d_garage.config.schema.policy.transfuser_config import (
     BevSemanticConfig,
     TransfuserConfig,
 )
-from py123d_garage.policy.transfuser.network.bev_semantic_decoder import (
+from py123d_garage.policy.transfuser.network.decoder.bev_semantic_decoder import (
     BEVSemanticDecoder,
     BevSemanticLabels,
 )
@@ -25,16 +32,19 @@ _ROAD, _VEHICLE = 1, 5
 
 def _decoder(class_ids: list[int]) -> BEVSemanticDecoder:
     config = TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
         bev_semantic_config=BevSemanticConfig(bev_semantic_class_ids=class_ids),
     )
     return BEVSemanticDecoder(config)
 
 
-def _labels(target: torch.Tensor, has_map: list[bool]) -> BevSemanticLabels:
-    return BevSemanticLabels(bev_semantic=target, bev_semantic_has_map=torch.tensor(has_map))
+def _labels(target: torch.Tensor, has_map: list[bool], has_boxes: list[bool] | None = None) -> BevSemanticLabels:
+    return BevSemanticLabels(
+        bev_semantic=target.to(torch.uint8),
+        bev_semantic_has_map=torch.tensor(has_map),
+        bev_semantic_has_box_annotations=torch.tensor(has_boxes if has_boxes is not None else [True] * len(has_map)),
+    )
 
 
 def _random_batch(batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -129,3 +139,49 @@ def test_metrics_count_map_predictions_as_background_without_a_map() -> None:
 
     assert without_map["bev_semantic_miou"].item() == pytest.approx(1.0)
     assert with_map["bev_semantic_miou"].item() == pytest.approx(0.0)
+
+
+def test_unannotated_pixel_allows_every_box_class() -> None:
+    """Uniform logits: background allows itself and the 3 box classes, -log(4/7); road with a map, -log(4/7) too."""
+    decoder = _decoder([1, 2, 3, 4, 5, 6])
+    logits = torch.zeros((2, 7, 1, 1))
+    target = torch.tensor([0, _ROAD])[:, None, None]
+
+    loss = decoder.compute_loss(logits, _labels(target, [True, True], [False, False]))["loss_bev_semantic"]
+
+    assert loss.item() == pytest.approx(-math.log(4 / 7))
+
+
+def test_sample_without_map_or_boxes_adds_no_loss_and_no_gradient() -> None:
+    decoder = _decoder([1, 2, 3, 4, 5, 6])
+    logits, target = _random_batch(2)
+
+    loss = decoder.compute_loss(logits, _labels(target, [True, False], [True, False]))["loss_bev_semantic"]
+    alone = decoder.compute_loss(logits[:1], _labels(target[:1], [True], [True]))["loss_bev_semantic"]
+    loss.backward()
+
+    assert loss.item() == pytest.approx(alone.item())
+    assert logits.grad is not None
+    assert torch.equal(logits.grad[1], torch.zeros_like(logits.grad[1]))
+
+
+def test_two_logsumexp_loss_matches_the_log_softmax_loss() -> None:
+    generator = torch.Generator().manual_seed(1)
+    logits = torch.randn(4, 7, 6, 5, generator=generator, dtype=torch.float64) * 3.0
+    target = torch.randint(0, 7, (4, 6, 5), generator=generator)
+    labels = _labels(target, [True, False, True, False], [True, True, False, False])
+    losses, gradients = [], []
+    for two_logsumexp_loss in (True, False):
+        config = TransfuserConfig(
+            trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
+            required_target_point_distances_m=[45.0],
+            bev_semantic_config=BevSemanticConfig(two_logsumexp_loss=two_logsumexp_loss),
+        )
+        leaf = logits.clone().requires_grad_(True)
+        loss = BEVSemanticDecoder(config).compute_loss(leaf, labels)["loss_bev_semantic"]
+        loss.backward()
+        losses.append(loss.detach())
+        gradients.append(leaf.grad)
+    # compute_loss runs in fp32.
+    torch.testing.assert_close(losses[0], losses[1], rtol=1e-6, atol=0.0)
+    torch.testing.assert_close(gradients[0], gradients[1], rtol=1e-5, atol=1e-8)

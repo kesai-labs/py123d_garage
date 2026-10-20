@@ -1,13 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """TransfuserConfig invariants: derived geometry, signature fields, loss gating."""
 
 from __future__ import annotations
+
+from dataclasses import replace
 
 import pytest
 import yaml
 
 from py123d_garage.api.abstract_policy import AbstractPolicy
+from py123d_garage.api.abstract_policy_config import uniform_offsets_us
 from py123d_garage.common.config_help import build_from_string, load_config
-from py123d_garage.config.presets.python.policy.transfuser import tf_carla
+from py123d_garage.config.presets.training.latent_transfuser import pretrain as latent_transfuser_pretrain
 from py123d_garage.config.schema.policy.policy_config import PolicyConfig
 from py123d_garage.config.schema.policy.transfuser_config import (
     BevSemanticConfig,
@@ -23,8 +29,7 @@ from py123d_garage.py123d_help.misc import FRONT_CAMERAS
 
 def test_default_bev_geometry_is_forward_biased() -> None:
     config = TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
     )
     assert (
@@ -44,8 +49,7 @@ def test_default_bev_geometry_is_forward_biased() -> None:
 def _config(**overrides: object) -> TransfuserConfig:
     """A config whose cameras are configured, as every cached store's is."""
     return TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
         camera_config=CameraConfig(input_cameras=FRONT_CAMERAS),
         **overrides,  # pyright: ignore[reportArgumentType]
@@ -77,13 +81,26 @@ def test_signature_tracks_geometry_changes() -> None:
     ).cache_signature("nuplan")
 
 
+def test_signature_tracks_the_past_camera_row_and_the_map_z_gate() -> None:
+    """One past row at another offset, or another z gate, changes the stored tensors without changing their shapes."""
+    reference = build_from_string(PolicyConfig(transfuser_config=_config()), AbstractPolicy).cache_signature("nuplan")
+    one_past_row = replace(
+        _config(),
+        camera_config=CameraConfig(input_cameras=FRONT_CAMERAS, past_camera_offset_us=1_000_000),
+    )
+    gated = _config(bev_semantic_config=BevSemanticConfig(map_z_gate_m=3.0))
+    for changed, tensor_name in ((one_past_row, "camera_feature"), (gated, "bev_semantic")):
+        signature = build_from_string(PolicyConfig(transfuser_config=changed), AbstractPolicy).cache_signature("nuplan")
+        assert signature[tensor_name] != reference[tensor_name]
+
+
 def test_signature_narrows_to_the_dataset_cameras() -> None:
     """A store holds one dataset, so only that dataset's cameras reach its signature."""
     policy = build_from_string(PolicyConfig(transfuser_config=_config()), AbstractPolicy)
     assert policy.cache_signature("nuplan")["camera_feature"]["input_cameras"] == str(
         ["PCAM_L0", "PCAM_F0", "PCAM_R0"],
     )
-    assert policy.cache_signature("kesai")["camera_feature"]["input_cameras"] == str(
+    assert policy.cache_signature("physical-ai-av")["camera_feature"]["input_cameras"] == str(
         ["FTCAM_L0", "FTCAM_F0", "FTCAM_R0"],
     )
 
@@ -97,8 +114,7 @@ def _loss_weights(config: TransfuserConfig) -> dict[str, float]:
 
 def test_loss_weights_zero_for_disabled_heads() -> None:
     config = TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
         bev_semantic_config=BevSemanticConfig(use_bev_semantic=False),
         box_detection_config=BoxDetectionConfig(detect_boxes=False),
@@ -116,8 +132,7 @@ def test_loss_weights_zero_for_disabled_heads() -> None:
 
 def test_box_velocity_is_an_explicit_switch() -> None:
     config = TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
         box_detection_config=BoxDetectionConfig(predict_box_velocity=True),
         lidar_config=LidarConfig(
@@ -129,8 +144,7 @@ def test_box_velocity_is_an_explicit_switch() -> None:
     # The head needs motion cues; enabling it without sweep history is rejected.
     with pytest.raises(ValueError, match="motion cues"):
         TransfuserConfig(
-            trajectory_horizon_us=4_000_000,
-            trajectory_interval_us=500_000,
+            trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
             required_target_point_distances_m=[45.0],
             box_detection_config=BoxDetectionConfig(predict_box_velocity=True),
             lidar_config=LidarConfig(),
@@ -140,15 +154,13 @@ def test_box_velocity_is_an_explicit_switch() -> None:
 def test_sweeps_require_a_declared_interval() -> None:
     with pytest.raises(ValueError, match="needs an interval"):
         TransfuserConfig(
-            trajectory_horizon_us=4_000_000,
-            trajectory_interval_us=500_000,
+            trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
             required_target_point_distances_m=[45.0],
             lidar_config=LidarConfig(lidar_horizon_us=200_000),
         )
     with pytest.raises(ValueError, match="not a multiple"):
         TransfuserConfig(
-            trajectory_horizon_us=4_000_000,
-            trajectory_interval_us=500_000,
+            trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
             required_target_point_distances_m=[45.0],
             lidar_config=LidarConfig(
                 lidar_interval_us=100_000,
@@ -159,8 +171,7 @@ def test_sweeps_require_a_declared_interval() -> None:
 
 def test_sweep_window_sets_the_required_history() -> None:
     config = TransfuserConfig(
-        trajectory_horizon_us=4_000_000,
-        trajectory_interval_us=500_000,
+        trajectory_offsets_us=uniform_offsets_us(500_000, 4_000_000),
         required_target_point_distances_m=[45.0],
         lidar_config=LidarConfig(
             lidar_interval_us=100_000,
@@ -171,7 +182,7 @@ def test_sweep_window_sets_the_required_history() -> None:
     assert config.required_past_lidar_interval_us == 100_000
 
 
-_CARLA_TRAINING_PRESET = "py123d_garage.config.presets.python.training.transfuser:tf_carla_train"
+_PRETRAIN_PRESET = "py123d_garage.config.presets.training.latent_transfuser:pretrain"
 
 
 @pytest.fixture(autouse=True)
@@ -183,13 +194,15 @@ def _load_training(overrides: list[str] | None = None) -> TrainingConfig:
     return load_config(
         TrainingConfig,
         "train",
-        args=[f"training={_CARLA_TRAINING_PRESET}", *(overrides or [])],
+        args=[f"training={_PRETRAIN_PRESET}", *(overrides or [])],
     )
 
 
 def test_loaded_policy_config_is_the_dataclass() -> None:
     """The loaded policy_config.transfuser_config node round-trips to the exact preset dataclass."""
-    assert _load_training().policy_config.transfuser_config == tf_carla()
+    assert (
+        _load_training().policy_config.transfuser_config == latent_transfuser_pretrain().policy_config.transfuser_config
+    )
 
 
 @pytest.mark.parametrize(
@@ -206,6 +219,7 @@ def test_loaded_policy_config_is_the_dataclass() -> None:
         "policy_config.transfuser_config.lidar_config.bev_max_x_m=32",
         "policy_config.transfuser_config.lidar_config.bev_min_y_m=-32",
         "policy_config.transfuser_config.lidar_config.bev_max_y_m=32",
+        "policy_config.transfuser_config.planning_config.flow_config.num_inference_steps=4",
     ],
 )
 def test_e2e_overrides_load(override: str) -> None:

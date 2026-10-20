@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Resolution of the module:name import strings the configs carry instead of objects."""
 
 from __future__ import annotations
@@ -9,18 +12,37 @@ T = TypeVar("T")
 
 
 def import_string(target: str) -> Any:
-    """Imports the object named by a module:name path."""
+    """
+    Imports the object named by a module:name path.
+
+    Args:
+        target: the module:name path.
+
+    Returns:
+        the imported object.
+    """
     module_name, _, object_name = target.partition(":")
     return getattr(importlib.import_module(module_name), object_name)
 
 
 @runtime_checkable
 class _HasTarget(Protocol):
+    """A config that names the class to build."""
+
     target: str
 
 
 def build_from_string(config: _HasTarget, base_class: type[T]) -> T:
-    """Constructs the base_class subclass config.target names, passing it the config."""
+    """
+    Constructs the base_class subclass config.target names, passing it the config.
+
+    Args:
+        config: the config that names the class and is passed to it.
+        base_class: the class the target must subclass.
+
+    Returns:
+        the constructed object.
+    """
     target_class = import_string(config.target)
     if not issubclass(target_class, base_class):
         raise TypeError(f"target {config.target!r} is not a {base_class.__name__} subclass.")

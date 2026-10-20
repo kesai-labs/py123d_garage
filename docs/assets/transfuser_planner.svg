@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 680" width="1600" height="680">
+  <defs>
+    <marker id="m" orient="auto-start-reverse" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#9a9a9a" />
+    </marker>
+    <marker id="mb" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#141414" />
+    </marker>
+    <marker id="mo" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#e5a300" />
+    </marker>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d6d4cf" />
+      <stop offset="0.45" stop-color="#efede8" />
+    </linearGradient>
+    <pattern id="grid8" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#141414" stroke-opacity="0.35" stroke-width="1.5" />
+    </pattern>
+  </defs>
+  <rect x="0.0" y="0.0" width="1600.0" height="680.0" rx="24" fill="#f5f3ee" stroke="none" stroke-width="0" />
+  <rect x="40.0" y="40.0" width="620.0" height="600.0" rx="18" fill="#efebe3" stroke="none" stroke-width="0" />
+  <rect x="150.0" y="40.0" width="400.0" height="600.0" rx="0" fill="#e3e3e3" stroke="none" stroke-width="0" />
+  <path d="M150 40 V640 M550 40 V640" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M283.3 40 V640" fill="none" stroke="#fbfaf7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="20 16" />
+  <path d="M416.7 40 V640" fill="none" stroke="#fbfaf7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="20 16" />
+  <rect x="468.0" y="303.0" width="30.0" height="54.0" rx="8" fill="#555555" stroke="none" stroke-width="0" />
+  <rect x="472.0" y="311.0" width="22.0" height="10.8" rx="2" fill="#c4c4c4" stroke="none" stroke-width="0" opacity="0.8" />
+  <rect x="472.0" y="345.0" width="22.0" height="6.0" rx="2" fill="#c4c4c4" stroke="none" stroke-width="0" opacity="0.55" />
+  <path d="M483.0 560.0 L483.0 556.0 L483.0 552.0 L483.0 548.0 L483.0 544.0 L483.0 540.0 L483.0 536.0 L483.0 532.0 L483.0 528.0 L483.0 524.0 L483.0 520.0 L483.0 516.0 L483.0 512.0 L483.0 508.0 L483.0 504.0 L483.0 500.0 L483.0 496.0 L483.0 492.0 L483.0 488.0 L483.0 484.0 L483.0 480.0 L483.0 476.0 L483.0 472.0 L483.0 468.0 L483.0 464.0 L483.0 460.0 L483.0 456.0 L483.0 452.0 L483.0 448.0 L483.0 444.0 L483.0 440.0 L483.0 436.0 L483.0 432.0 L483.0 428.0 L483.0 424.0 L483.0 420.0 L482.8 416.0 L482.3 412.0 L481.5 408.0 L480.3 404.0 L478.9 400.0 L477.2 396.0 L475.2 392.0 L473.0 388.0 L470.5 384.0 L467.8 380.0 L464.9 376.0 L461.8 372.0 L458.6 368.0 L455.1 364.0 L451.6 360.0 L447.9 356.0 L444.1 352.0 L440.2 348.0 L436.2 344.0 L432.1 340.0 L428.0 336.0 L423.8 332.0 L419.6 328.0 L415.5 324.0 L411.3 320.0 L407.1 316.0 L402.9 312.0 L398.8 308.0 L394.8 304.0 L390.9 300.0 L387.0 296.0 L383.2 292.0 L379.6 288.0 L376.1 284.0 L372.8 280.0 L369.6 276.0 L366.6 272.0 L363.8 268.0 L361.3 264.0 L358.9 260.0 L356.8 256.0 L354.9 252.0 L353.4 248.0 L352.1 244.0 L351.1 240.0 L350.4 236.0 L350.0 232.0 L350.0 228.0 L350.0 224.0 L350.0 220.0 L350.0 216.0 L350.0 212.0 L350.0 208.0 L350.0 204.0 L350.0 200.0 L350.0 196.0 L350.0 192.0 L350.0 188.0 L350.0 184.0 L350.0 180.0 L350.0 176.0 L350.0 172.0 L350.0 168.0 L350.0 164.0 L350.0 160.0 L350.0 156.0 L350.0 152.0 L350.0 148.0 L350.0 144.0 L350.0 140.0 L350.0 136.0 L350.0 132.0 L350.0 128.0 L350.0 124.0 L350.0 120.0 L350.0 116.0 L350.0 112.0 L350.0 108.0 L350.0 104.0 L350.0 100.0 L350.0 96.0 L350.0 92.0 L350.0 88.0 L350.0 84.0 L350.0 80.0 L350.0 76.0 L350.0 72.0 L350.0 68.0 L350.0 64.0 L350.0 60.0" fill="none" stroke="#ffecb8" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="483.0" cy="556.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="552.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="548.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="544.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="540.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="536.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="532.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="528.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="524.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="520.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="516.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="511.9" r="7" fill="#141414" />
+  <circle cx="483.0" cy="507.7" r="7" fill="#141414" />
+  <circle cx="483.0" cy="503.2" r="7" fill="#141414" />
+  <circle cx="483.0" cy="498.3" r="7" fill="#141414" />
+  <circle cx="483.0" cy="493.0" r="7" fill="#141414" />
+  <circle cx="483.0" cy="487.2" r="7" fill="#141414" />
+  <circle cx="483.0" cy="480.8" r="7" fill="#141414" />
+  <circle cx="483.0" cy="473.9" r="7" fill="#141414" />
+  <circle cx="483.0" cy="466.4" r="7" fill="#141414" />
+  <circle cx="483.0" cy="458.3" r="7" fill="#141414" />
+  <circle cx="483.0" cy="449.7" r="7" fill="#141414" />
+  <circle cx="483.0" cy="440.5" r="7" fill="#141414" />
+  <circle cx="483.0" cy="430.8" r="7" fill="#141414" />
+  <circle cx="483.0" cy="420.7" r="7" fill="#141414" />
+  <circle cx="482.0" cy="410.2" r="7" fill="#141414" />
+  <circle cx="478.7" cy="399.4" r="7" fill="#141414" />
+  <circle cx="473.2" cy="388.5" r="7" fill="#141414" />
+  <circle cx="466.0" cy="377.5" r="7" fill="#141414" />
+  <circle cx="457.3" cy="366.5" r="7" fill="#141414" />
+  <circle cx="447.4" cy="355.5" r="7" fill="#141414" />
+  <circle cx="436.7" cy="344.5" r="7" fill="#141414" />
+  <circle cx="483.0" cy="536.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="483.0" cy="512.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="483.0" cy="488.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="483.0" cy="464.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="483.0" cy="440.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="482.8" cy="416.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="475.2" cy="392.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="458.6" cy="368.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="436.2" cy="344.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="411.3" cy="320.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="387.0" cy="296.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="366.6" cy="272.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="353.4" cy="248.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="350.0" cy="224.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="350.0" cy="200.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="350.0" cy="176.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="350.0" cy="152.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="350.0" cy="128.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="350.0" cy="104.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <circle cx="350.0" cy="80.0" r="4" fill="#ffbe27" stroke="#141414" stroke-width="1.5" />
+  <rect x="468.0" y="563.0" width="30.0" height="54.0" rx="8" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <rect x="472.0" y="571.0" width="22.0" height="10.8" rx="2" fill="#fbfaf7" stroke="none" stroke-width="0" opacity="0.8" />
+  <rect x="472.0" y="605.0" width="22.0" height="6.0" rx="2" fill="#fbfaf7" stroke="none" stroke-width="0" opacity="0.55" />
+  <text x="376.0" y="96.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#8a5d00" text-anchor="start">Path</text>
+  <text x="410.7" y="352.5" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="600" fill="#141414" text-anchor="end">Waypoints</text>
+  <rect x="720.0" y="40.0" width="840.0" height="600.0" rx="20" fill="#141414" stroke="none" stroke-width="0" />
+  <text x="756.0" y="96.0" font-family="'Space Grotesk','IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="32" font-weight="600" fill="#f5f3ee" text-anchor="start">DiT Motion Planner</text>
+  <text x="756.0" y="128.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#c4c4c4" text-anchor="start">Joint flow matching · 8 Euler steps from zero noise</text>
+  <rect x="756.0" y="170.0" width="768.0" height="112.0" rx="12" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <rect x="756.0" y="170.0" width="10.0" height="112.0" rx="5" fill="#ffbe27" stroke="none" stroke-width="0" />
+  <text x="792.0" y="210.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#f5f3ee" text-anchor="start">Path</text>
+  <text x="792.0" y="240.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#c4c4c4" text-anchor="start">64 points, every 1 m</text>
+  <text x="792.0" y="266.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#9a9a9a" text-anchor="start">Logged future resampled by arc length</text>
+  <rect x="756.0" y="310.0" width="768.0" height="112.0" rx="12" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <rect x="756.0" y="310.0" width="10.0" height="112.0" rx="5" fill="#555555" stroke="none" stroke-width="0" />
+  <text x="792.0" y="350.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#f5f3ee" text-anchor="start">Actions</text>
+  <text x="792.0" y="380.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#c4c4c4" text-anchor="start">Longitudinal + lateral acceleration, 64 × 0.1 s</text>
+  <text x="792.0" y="406.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#9a9a9a" text-anchor="start">Bounded to the MPC limits, rolled out from ego speed</text>
+  <rect x="756.0" y="450.0" width="768.0" height="112.0" rx="12" fill="#2b2b2b" stroke="none" stroke-width="0" />
+  <rect x="756.0" y="450.0" width="10.0" height="112.0" rx="5" fill="#f5f3ee" stroke="none" stroke-width="0" />
+  <text x="792.0" y="490.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="26" font-weight="600" fill="#f5f3ee" text-anchor="start">Waypoints</text>
+  <text x="792.0" y="520.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#c4c4c4" text-anchor="start">64 poses, every 0.1 s to 6.4 s</text>
+  <text x="792.0" y="546.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#9a9a9a" text-anchor="start">Tracked by the controller</text>
+  <text x="756.0" y="610.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#c4c4c4" text-anchor="start">Context: 64 BEV tokens · 8 registers · speed · target points</text>
+</svg>

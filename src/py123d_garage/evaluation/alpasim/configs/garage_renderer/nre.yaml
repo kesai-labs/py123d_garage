@@ -1,0 +1,20 @@
+# @package _global_
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+# The NRE renderer of the PAI track without the harmonizer, like the challenge (+e2e_challenge=ec2) until its final
+# reruns. Restates the upstream command, since a list override replaces it.
+services:
+  renderer:
+    command:
+      - "${defines.renderer_entrypoint}"
+      - "serve-grpc"
+      - "--port={port}"
+      - "--host=0.0.0.0"
+      - "--artifact-glob=/mnt/nre-data/{sceneset}/**/*.usdz"
+      - "--egocar-hood-dir=/mnt/ego-hoods"
+      - "--no-enable-nrend"
+      - "--download-cache-dir /tmp/nre-cache-dir"
+      - "--cache-size=${defines.nre_cache_size}"
+      - "--max-workers=${defines.nre_max_workers}"
+      - "--enable-editing-actors"

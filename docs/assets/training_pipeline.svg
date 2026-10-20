@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" width="1600" height="400">
+  <defs>
+    <marker id="m" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible">
+      <path d="M0 0 L4 2 L0 4 Z" fill="#9a9a9a" />
+    </marker>
+  </defs>
+  <rect x="0.0" y="0.0" width="1600.0" height="400.0" rx="24" fill="#f5f3ee" />
+  <rect x="60.0" y="130.0" width="290.0" height="110.0" rx="14" fill="#5c5c5c" />
+  <text x="205.0" y="180.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#ffffff" text-anchor="middle">Permanent cache</text>
+  <text x="205.0" y="210.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#e3e3e3" text-anchor="middle">Built once</text>
+  <text x="205.0" y="280.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="18" font-weight="400" fill="#555555" text-anchor="middle">build_cache.sh</text>
+  <text x="205.0" y="108.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">Read by every stage</text>
+  <path d="M362 185 L418 185" fill="none" stroke="#9a9a9a" stroke-width="4" stroke-linecap="round" marker-end="url(#m)" />
+  <rect x="440.0" y="130.0" width="383.6" height="110.0" rx="14" fill="#141414" />
+  <text x="631.8" y="180.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#ffffff" text-anchor="middle">Pretrain</text>
+  <text x="631.8" y="210.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#e3e3e3" text-anchor="middle">8.9 h</text>
+  <text x="631.8" y="108.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">Robust perception features</text>
+  <text x="889.2" y="280.0" font-family="'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace" font-size="18" font-weight="400" fill="#555555" text-anchor="middle">train_all.sh</text>
+  <rect x="831.6" y="130.0" width="286.8" height="110.0" rx="14" fill="#141414" />
+  <text x="975.0" y="180.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#ffffff" text-anchor="middle">Midtrain</text>
+  <text x="975.0" y="210.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#e3e3e3" text-anchor="middle">6.7 h</text>
+  <text x="975.0" y="108.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">General driving capability</text>
+  <rect x="1126.4" y="130.0" width="212.0" height="110.0" rx="14" fill="#ffbe27" />
+  <text x="1232.4" y="180.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#141414" text-anchor="middle">Posttrain</text>
+  <text x="1232.4" y="210.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#3d3d3d" text-anchor="middle">5.0 h</text>
+  <text x="1232.4" y="108.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">Instruction following</text>
+  <path d="M440 320 L1540 320" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" />
+  <path d="M440.0 312 L440.0 328" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" />
+  <text x="440.0" y="356.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">0 h</text>
+  <path d="M660.0 312 L660.0 328" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" />
+  <text x="660.0" y="356.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">5 h</text>
+  <path d="M880.0 312 L880.0 328" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" />
+  <text x="880.0" y="356.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">10 h</text>
+  <path d="M1100.0 312 L1100.0 328" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" />
+  <text x="1100.0" y="356.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">15 h</text>
+  <path d="M1320.0 312 L1320.0 328" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" />
+  <text x="1320.0" y="356.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">20 h</text>
+  <path d="M1540.0 312 L1540.0 328" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linecap="round" />
+  <text x="1540.0" y="356.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="400" fill="#555555" text-anchor="middle">25 h</text>
+  <text x="418.0" y="328.0" font-family="'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="20" font-weight="600" fill="#141414" text-anchor="end">One 8 x H100 node</text>
+</svg>

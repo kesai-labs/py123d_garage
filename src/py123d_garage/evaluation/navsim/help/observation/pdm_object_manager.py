@@ -15,6 +15,7 @@ from py123d_garage.evaluation.navsim.help.utils.pdm_constants import (
     DYNAMIC_OBJECT_LABELS,
 )
 
+# Number of nearest dynamic objects kept per label; "else" covers the other dynamic labels.
 MAX_DYNAMIC_OBJECTS_PER_LABEL: dict[str, int] = {
     "vehicle": 50,
     "person": 25,
@@ -22,11 +23,12 @@ MAX_DYNAMIC_OBJECTS_PER_LABEL: dict[str, int] = {
     "else": 10,
 }
 
+# Number of nearest static objects kept.
 MAX_STATIC_OBJECTS: int = 50
 
 
 class PDMObjectManager:
-    """Class that stores and sorts tracked objects around the ego-vehicle."""
+    """Collects the objects around ego and keeps the nearest ones per label."""
 
     def __init__(
         self,
@@ -37,17 +39,14 @@ class PDMObjectManager:
         max_static_objects: int = MAX_STATIC_OBJECTS,
     ) -> None:
         """
-        Constructor of PDMObjectManager.
+        Sets up an empty object manager.
 
         Args:
-            max_dynamic_objects_per_label: cap on tracked dynamic objects kept per label
-            max_static_objects: cap on tracked static objects kept
+            max_dynamic_objects_per_label: Number of nearest dynamic objects kept per label.
+            max_static_objects: Number of nearest static objects kept.
         """
-
-        # all objects
         self._unique_objects: dict[str, BoxDetectionSE2] = {}
 
-        # dynamic objects
         self._max_dynamic_objects_per_label = max_dynamic_objects_per_label
         self._dynamic_object_tokens: dict[str, list[str]] = {key: [] for key in max_dynamic_objects_per_label}
         self._dynamic_object_bbse2: dict[
@@ -58,14 +57,18 @@ class PDMObjectManager:
             key: [] for key in max_dynamic_objects_per_label
         }
 
-        # static objects
         self._max_static_objects = max_static_objects
         self._static_object_tokens: list[str] = []
         self._static_object_bbse2: list[npt.NDArray[np.float64]] = []
 
     @property
     def unique_objects(self) -> dict[str, BoxDetectionSE2]:
-        """Mapping from track token to every object added to the manager."""
+        """
+        The objects added to the manager.
+
+        Returns:
+            Every added object, keyed by track token.
+        """
         return self._unique_objects
 
     def add_object(self, box_detection_se2: BoxDetectionSE2) -> None:
@@ -73,9 +76,8 @@ class PDMObjectManager:
         Adds an object to the manager, sorting it into the dynamic or static category.
 
         Args:
-            box_detection_se2: any tracked object
+            box_detection_se2: Object to add.
         """
-
         bbse2_array = box_detection_se2.bounding_box_se2.array
         default_label = box_detection_se2.attributes.default_label
         track_token = box_detection_se2.attributes.track_token
@@ -133,13 +135,13 @@ class PDMObjectManager:
         jt.Float64[npt.NDArray[np.float64], "dynamic 2"],
     ]:
         """
-        Retrieves the nearest objects per category, capped per label.
+        Retrieves the nearest static and dynamic objects, capped per label.
 
         Args:
-            position: global map position
+            position: Position in the global frame to measure distances from.
 
         Returns:
-            tuple containing tokens, bbse2, and dynamic information of objects
+            The static tokens and boxes, then the dynamic tokens, boxes and velocities.
         """
         dynamic_object_tokens: list[str] = []
         dynamic_object_bbse2_list: list[npt.NDArray[np.float64]] = []
@@ -200,11 +202,11 @@ class PDMObjectManager:
         Retrieves the nearest dynamic objects of the given label.
 
         Args:
-            position: Ego-vehicle position
-            label: Object label to sort
+            position: Position to measure distances from.
+            label: Label of the objects.
 
         Returns:
-            Tuple of tokens, bbse2, and velocity of nearest objects.
+            The tokens, boxes and velocities of the nearest objects.
         """
         position_coords = position.array[None, ...]  # shape: (1,2)
 
@@ -242,10 +244,10 @@ class PDMObjectManager:
         Retrieves the nearest static obstacles around ego's position.
 
         Args:
-            position: ego's position
+            position: Position to measure distances from.
 
         Returns:
-            tuple of tokens and coords of nearest objects
+            The tokens and boxes of the nearest objects.
         """
         position_coords = position.array[None, ...]  # shape: (1,2)
 

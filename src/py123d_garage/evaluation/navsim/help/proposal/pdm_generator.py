@@ -47,31 +47,44 @@ from py123d_garage.evaluation.navsim.help.utils.pdm_enums import (
 
 @dataclass
 class PDMGeneratorState:
-    """Dataclass to store the state of the PDMGenerator, for debugging and visualization purposes."""
+    """The unrolling state of the PDMGenerator for one planning iteration."""
 
+    # Ego states of each proposal over time.
     state_array: jt.Float64[npt.NDArray[np.float64], "proposals times 11"]
+    # IDM progress and velocity of each proposal over time.
     state_idm_array: jt.Float64[npt.NDArray[np.float64], "proposals times 2"]
+    # Lead agent progress, velocity and rear length of each proposal over time.
     leading_agent_array: jt.Float64[
         npt.NDArray[np.float64],
         "proposals times 3",
     ]
 
+    # Proposals being unrolled.
     proposal_manager: PDMProposalManager
+    # Forecast of the agents and traffic lights.
     observation: PDMObservation
 
+    # Ego state at the start of the unrolling.
     initial_ego_state_se2: EgoStateSE2
 
+    # Driving corridor of each lateral path, keyed by lateral index.
     driving_corridor_cache: dict[int, Polygon]
+    # Timestamps of the unrolled poses.
     time_point_list: list[Timestamp]
 
     @property
     def ego_metadata(self) -> EgoStateSE3Metadata:
-        """Metadata (dimensions, etc.) of the initial ego state."""
+        """
+        The metadata of the initial ego state.
+
+        Returns:
+            The ego metadata, such as its dimensions.
+        """
         return self.initial_ego_state_se2.metadata
 
 
 class PDMGenerator:
-    """Class to generate proposals in PDM."""
+    """Unrolls the PDM proposals and the selected trajectory with IDM along their paths."""
 
     def __init__(
         self,
@@ -80,28 +93,26 @@ class PDMGenerator:
         leading_agent_update_rate: int = 2,
     ):
         """
-        Constructor of PDMGenerator.
+        Sets up the generator.
 
         Args:
-            trajectory_grid: Sampling parameters for final trajectory
-            proposal_grid: Sampling parameters for proposals
-            leading_agent_update_rate: sample update-rate of leading agent state, defaults to 2
+            trajectory_grid: Grid of the final trajectory.
+            proposal_grid: Grid of the proposals.
+            leading_agent_update_rate: Number of time steps between lead agent updates.
         """
         assert trajectory_grid.interval_us == proposal_grid.interval_us, (
             "PDMGenerator: Proposals and Trajectory must have equal interval length!"
         )
 
-        # trajectory config
         self._trajectory_grid: TrajectoryGrid = trajectory_grid
         self._proposal_grid: TrajectoryGrid = proposal_grid
         _sample_interval = trajectory_grid.interval_s
         assert _sample_interval is not None, "PDMGenerator: interval length must be defined!"
         self._sample_interval: float = _sample_interval
 
-        # generation config
         self._leading_agent_update: int = leading_agent_update_rate
 
-        # lazy loaded
+        # Set by generate_proposals().
         self._state: PDMGeneratorState | None = None
 
     def _init_state(
@@ -111,26 +122,24 @@ class PDMGenerator:
         proposal_manager: PDMProposalManager,
     ) -> PDMGeneratorState:
         """
-        Re-initializes the unrolling state arrays and caches for a new iteration.
+        Creates empty unrolling arrays and caches for a new iteration.
 
         Args:
-            initial_ego_state_se2: ego-vehicle state at t=0
-            observation: PDMObservation class
-            proposal_manager: PDMProposalManager class
+            initial_ego_state_se2: Ego state at the start of the unrolling.
+            observation: Forecast of the agents and traffic lights.
+            proposal_manager: Proposals to unroll.
 
         Returns:
-            freshly initialized PDMGeneratorState
+            The fresh generator state.
         """
         assert initial_ego_state_se2 is not None, "PDMGenerator: initial_ego_state_se2 must be defined!"
         assert observation is not None, "PDMGenerator: observation must be defined!"
         assert proposal_manager is not None, "PDMGenerator: proposal_manager must be defined!"
 
-        # lazy loading
         _proposal_manager = proposal_manager
         _observation = observation
         _initial_ego_state_se2 = initial_ego_state_se2
 
-        # reset proposal state arrays
         _state_array = np.zeros(
             (
                 len(_proposal_manager),
@@ -138,7 +147,7 @@ class PDMGenerator:
                 len(StateIndex),
             ),
             dtype=np.float64,
-        )  # x, y, heading
+        )
         _state_idm_array = np.zeros(
             (
                 len(_proposal_manager),
@@ -156,7 +165,6 @@ class PDMGenerator:
             dtype=np.float64,
         )  # progress, velocity, rear-length
 
-        # reset caches
         _driving_corridor_cache: dict[int, Polygon] = {}
 
         initial_time_us = _initial_ego_state_se2.timestamp.time_us
@@ -187,17 +195,15 @@ class PDMGenerator:
         proposal_manager: PDMProposalManager,
     ) -> jt.Float64[npt.NDArray[np.float64], "proposals times 11"]:
         """
-        Generates proposals by unrolling IDM policies for varying paths.
-
-        Saves the proposal states in array representation.
+        Unrolls every proposal's IDM policy along its path over the proposal horizon.
 
         Args:
-            initial_ego_state: state of ego-vehicle at t=0
-            observation: PDMObservation class
-            proposal_manager: PDMProposalManager class
+            initial_ego_state: Ego state at the start of the unrolling.
+            observation: Forecast of the agents and traffic lights.
+            proposal_manager: Proposals to unroll.
 
         Returns:
-            unrolled proposal states in array representation
+            The unrolled ego states of each proposal.
         """
         self._state = self._init_state(
             initial_ego_state,
@@ -223,13 +229,13 @@ class PDMGenerator:
 
     def generate_trajectory(self, proposal_idx: int) -> TrajectorySE2:
         """
-        Completes unrolling of the selected proposal to the full trajectory horizon.
+        Continues unrolling the selected proposal to the full trajectory horizon.
 
         Args:
-            proposal_idx: index of best-scored proposal
+            proposal_idx: Index of the selected proposal.
 
         Returns:
-            the unrolled trajectory as SE2
+            The unrolled trajectory in the absolute frame.
         """
         assert self._state is not None, "PDMGenerator: call generate_proposals first!"
         assert len(self._state.time_point_list) == self._proposal_grid.num_poses + 1, (
@@ -267,15 +273,14 @@ class PDMGenerator:
 
     def _initialize_states(self, lateral_batch_idcs: list[int]) -> None:
         """
-        Initializes all state arrays for ego, IDM, and leading agent at t=0.
+        Fills the ego and IDM states at the first time step.
 
         Args:
-            lateral_batch_idcs: list of proposal indices, sharing a path.
+            lateral_batch_idcs: Indices of the proposals sharing a path.
         """
         assert self._state is not None, "PDMGenerator: call _init_state first!"
 
-        # all initial states are identical for shared lateral_idx
-        # thus states are created for lateral_batch_idcs[0] and repeated
+        # Proposals sharing a path start in the same state.
         dummy_proposal_idx = lateral_batch_idcs[0]
 
         ego_position = self._state.initial_ego_state_se2.rear_axle_2d.shapely_point
@@ -306,11 +311,11 @@ class PDMGenerator:
         time_idx: int,
     ) -> None:
         """
-        Updates the ego state array at the current time-step.
+        Places the ego poses on the path at the current IDM progress.
 
         Args:
-            lateral_batch_idcs: list of proposal indices, sharing a path.
-            time_idx: index of unrolling iteration (for proposal/trajectory samples)
+            lateral_batch_idcs: Indices of the proposals sharing a path.
+            time_idx: Index of the current time step.
         """
         assert self._state is not None, "PDMGenerator: call _init_state first!"
         assert time_idx > 0, "PDMGenerator: call _initialize_states first!"
@@ -337,11 +342,11 @@ class PDMGenerator:
         time_idx: int,
     ) -> None:
         """
-        Updates the IDM state array by propagating the policy for one step.
+        Propagates the IDM states by one time step.
 
         Args:
-            lateral_batch_idcs: list of proposal indices, sharing a path.
-            time_idx: index of unrolling iteration (for proposal/trajectory samples)
+            lateral_batch_idcs: Indices of the proposals sharing a path.
+            time_idx: Index of the current time step.
         """
         assert self._state is not None, "PDMGenerator: call _init_state first!"
         assert time_idx > 0, "PDMGenerator: call _initialize_states first!"
@@ -365,16 +370,15 @@ class PDMGenerator:
         time_idx: int,
     ) -> None:
         """
-        Updates the leading agent state array from agents/obstacles in the driving corridor.
+        Finds the lead agent of each proposal in its driving corridor, every few time steps.
 
         Args:
-            lateral_batch_idcs: list of proposal indices, sharing a path.
-            time_idx: index of unrolling iteration (for proposal/trajectory samples)
+            lateral_batch_idcs: Indices of the proposals sharing a path.
+            time_idx: Index of the current time step.
         """
         assert time_idx > 0, "PDMGenerator: call _initialize_states first!"
         assert self._state is not None, "PDMGenerator: call _init_state first!"
 
-        # update leading agent state at first call or at update rate (runtime)
         update_leading_agent: bool = (time_idx % self._leading_agent_update) == 0
 
         if not update_leading_agent:
@@ -395,7 +399,6 @@ class PDMGenerator:
                 time_idx,
             )
 
-            # collect all leading vehicles ones for all proposals (run-time)
             object_progress_dict: dict[str, float] = {}
             for token in intersecting_objects:
                 if token not in self._state.observation.collided_track_ids:
@@ -404,7 +407,6 @@ class PDMGenerator:
                     )
                     object_progress_dict[token] = object_progress
 
-            # select leading agent for each proposal individually
             for proposal_idx in lateral_batch_idcs:
                 current_ego_progress = self._state.state_idm_array[
                     proposal_idx,
@@ -412,7 +414,6 @@ class PDMGenerator:
                     StateIDMIndex.PROGRESS,
                 ]
 
-                # filter all objects ahead
                 agents_ahead: dict[str, float] = {
                     agent: progress
                     for agent, progress in object_progress_dict.items()
@@ -452,11 +453,9 @@ class PDMGenerator:
                     argmin = np.argmin(relative_distances)
                     nearest_agent = list(agents_ahead.keys())[argmin]
 
-                    # add rel. distance for red light, object or agent
                     relative_distance = current_ego_progress + relative_distances[argmin]
                     leading_agent_array[LeadingAgentIndex.PROGRESS] = relative_distance
 
-                    # calculate projected velocity if not red light
                     if self._state.observation.red_light_token not in nearest_agent:
                         leading_agent_array[LeadingAgentIndex.VELOCITY] = self._get_leading_agent_velocity(
                             ego_yaw=current_state_se2.yaw,
@@ -478,14 +477,14 @@ class PDMGenerator:
         agent: BoxDetectionSE2,
     ) -> float:
         """
-        Calculates velocity of leading vehicle projected onto ego's heading.
+        Projects the lead agent's velocity onto ego's heading.
 
         Args:
-            ego_yaw: heading angle [rad]
-            agent: the leading object
+            ego_yaw: Ego heading, in radians.
+            agent: Lead agent.
 
         Returns:
-            projected velocity [m/s]
+            The projected velocity in m/s, zero for static objects.
         """
         if (
             isinstance(agent, BoxDetectionSE2) and agent.attributes.default_label in DYNAMIC_OBJECT_LABELS
@@ -506,14 +505,14 @@ class PDMGenerator:
         time_idx: int,
     ) -> list[str]:
         """
-        Returns all objects intersecting the proposals' driving corridor at a time-step.
+        Finds the objects intersecting the driving corridor of a path at a time step.
 
         Args:
-            lateral_batch_idcs: list of proposal indices, sharing a path
-            time_idx: index of unrolling iteration (for proposal/trajectory samples)
+            lateral_batch_idcs: Indices of the proposals sharing a path.
+            time_idx: Index of the current time step.
 
         Returns:
-            list of object tokens
+            The tokens of the intersecting objects.
         """
         assert self._state is not None, "PDMGenerator: call _init_state first!"
         dummy_proposal_idx = lateral_batch_idcs[0]
@@ -528,13 +527,13 @@ class PDMGenerator:
 
     def _get_driving_corridor(self, proposal_idx: int) -> Polygon:
         """
-        Creates and caches the driving corridor of the ego-vehicle for each proposal path.
+        Builds and caches the driving corridor of a proposal's path.
 
         Args:
-            proposal_idx: index of a proposal
+            proposal_idx: Index of the proposal.
 
         Returns:
-            polygon spanning the max trajectory distance, buffered by ego's width
+            The path ahead up to the farthest reachable distance, buffered by half of ego's width.
         """
         assert self._state is not None, "PDMGenerator: call _init_state first!"
         lateral_idx = self._state.proposal_manager[proposal_idx].lateral_idx
@@ -565,10 +564,10 @@ class PDMGenerator:
 
     def _get_lateral_batch_dict(self) -> dict[int, list[int]]:
         """
-        Groups proposal indices by their shared lateral path.
+        Groups the proposal indices by their path.
 
         Returns:
-            dictionary mapping lateral index to its proposal indices
+            The proposal indices of each lateral index.
         """
         assert self._state is not None, "PDMGenerator: call _init_state first!"
         lateral_batch_dict: dict[int, list[int]] = {}

@@ -1,8 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """py123d executors with their progress bars forced on, and a process pool that needs no shared-memory semaphores."""
 
 from __future__ import annotations
 
 import multiprocessing
+import os
 import traceback
 from concurrent.futures import Future
 from multiprocessing.connection import Connection, Pipe, wait
@@ -19,8 +23,17 @@ from tqdm import tqdm
 from typing_extensions import override
 
 
-def _serve(connection: Connection) -> None:
-    """Runs one worker: answers every (index, fn, args) message with (index, result, traceback)."""
+def _serve(connection: Connection, cpus: set[int] | None = None) -> None:
+    """
+    Runs one worker: answers every (index, fn, args) message with (index, result, traceback).
+
+    Args:
+        connection: the worker's end of its pipe.
+        cpus: the CPUs to pin the worker to; None keeps the forkserver's set.
+    """
+    if cpus is not None:
+        # Forkserver children inherit the forkserver's CPU set, so the parent's does not reach them.
+        os.sched_setaffinity(0, cpus)
     while True:
         try:
             index, fn, args = cast("tuple[int, Any, tuple[Any, ...]]", connection.recv())
@@ -36,18 +49,16 @@ class VerboseProcessPoolExecutor(Executor):
     """
     Forkserver workers driven over pipes, with progress bars on.
 
-    The stdlib pool coordinates its workers through named semaphores in /dev/shm; a node
-    cleaning that directory (logind's RemoveIPC, container limits) breaks the pool and
-    hangs the parent at exit. Pipes travel as file descriptors, so nothing on the node can
-    take them away, and a dead worker raises here instead of stalling.
+    Pipes avoid the stdlib pool's /dev/shm semaphores, which a node cleanup can delete and hang the parent.
     """
 
-    def __init__(self, max_workers: int | None = None) -> None:
+    def __init__(self, max_workers: int | None = None, cpus: set[int] | None = None) -> None:
         """
         Starts the workers.
 
         Args:
             max_workers: number of worker processes; the node's logical core count when None.
+            cpus: the CPUs the workers run on; None keeps the forkserver's set.
         """
         super().__init__(
             ExecutorResources(
@@ -60,7 +71,7 @@ class VerboseProcessPoolExecutor(Executor):
         self._workers: list[tuple[BaseProcess, Connection]] = []
         for _ in range(self.number_of_threads):
             parent_connection, child_connection = cast("tuple[Connection[Any, Any], Connection[Any, Any]]", Pipe())
-            process = context.Process(target=_serve, args=(child_connection,), daemon=True)
+            process = context.Process(target=_serve, args=(child_connection, cpus), daemon=True)
             process.start()
             child_connection.close()
             self._workers.append((process, parent_connection))
@@ -109,6 +120,7 @@ class VerboseProcessPoolExecutor(Executor):
         raise NotImplementedError("VerboseProcessPoolExecutor only supports map")
 
     def _terminate(self) -> None:
+        """Closes the pipes and kills every worker."""
         for process, connection in self._workers:
             connection.close()
             process.terminate()

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 from __future__ import annotations
 
 import abc
@@ -13,11 +16,8 @@ from py123d_garage.datatypes.numerics import NonNegativeInt, PositiveFloat, Posi
 class AbstractPolicyConfig(abc.ABC):
     """Policy protocol configuration."""
 
-    # Planning horizon.
-    trajectory_horizon_us: PositiveInt = MISSING
-
-    # Planning interval.
-    trajectory_interval_us: PositiveInt = MISSING
+    # Times past the anchor the predicted trajectory holds a pose at, strictly increasing.
+    trajectory_offsets_us: list[PositiveInt] = MISSING
 
     # Distances along the intended route at which the target points are placed.
     required_target_point_distances_m: list[PositiveFloat] = MISSING
@@ -25,7 +25,7 @@ class AbstractPolicyConfig(abc.ABC):
     @property
     @abc.abstractmethod
     def required_history_duration_us(self) -> NonNegativeInt:
-        """How far back the policy requires its history to cover: ego state, camera and lidar. Zero means the policy only needs the current/anchor state."""
+        """How far back the policy reads ego state, camera and lidar; zero means only the anchor frame."""
 
     @property
     def required_cameras(self) -> dict[str, list[CameraID]]:
@@ -54,23 +54,29 @@ class AbstractPolicyConfig(abc.ABC):
 
     @property
     def trajectory_num_steps(self) -> PositiveInt:
-        """
-        How many poses the predicted trajectory holds, derived from the physical fields.
-
-        Returns:
-            the number of poses, the first at trajectory_interval_us and the last at trajectory_horizon_us.
-
-        Raises:
-            ValueError: if the horizon is not a whole number of intervals.
-        """
-        if self.trajectory_horizon_us % self.trajectory_interval_us:
-            raise ValueError(
-                f"trajectory_horizon_us {self.trajectory_horizon_us} is not a multiple of "
-                f"trajectory_interval_us {self.trajectory_interval_us}.",
-            )
-        return self.trajectory_horizon_us // self.trajectory_interval_us
+        """How many poses the predicted trajectory holds."""
+        return len(self.trajectory_offsets_us)
 
     @property
-    def trajectory_interval_s(self) -> PositiveFloat:
-        """Time between consecutive poses of the predicted trajectory in seconds."""
-        return self.trajectory_interval_us * 1e-6
+    def trajectory_horizon_us(self) -> PositiveInt:
+        """How far past the anchor the last predicted pose sits."""
+        return self.trajectory_offsets_us[-1]
+
+
+def uniform_offsets_us(
+    interval_us: PositiveInt,
+    horizon_us: PositiveInt,
+    start_us: NonNegativeInt = 0,
+) -> list[PositiveInt]:
+    """
+    Builds one evenly spaced block of offsets for trajectory_offsets_us.
+
+    Args:
+        interval_us: spacing between consecutive offsets.
+        horizon_us: the last offset of the block.
+        start_us: the offset the block starts after, defaults to 0.
+
+    Returns:
+        the block's offsets, the first at start_us + interval_us and the last at horizon_us.
+    """
+    return list(range(start_us + interval_us, horizon_us + 1, interval_us))

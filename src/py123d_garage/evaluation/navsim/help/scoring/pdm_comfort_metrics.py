@@ -27,7 +27,7 @@ MAX_ABS_LAT_ACCEL: float = 4.89  # [m/s^2]
 
 # (3) ego_lon_acceleration_metric
 MAX_LON_ACCEL: float = 2.40  # [m/s^2]
-MIN_LON_ACCEL: float = -4.05
+MIN_LON_ACCEL: float = -4.05  # [m/s^2]
 
 # (4) ego_yaw_acceleration_metric
 MAX_ABS_YAW_ACCEL: float = 1.93  # [rad/s^2]
@@ -167,7 +167,7 @@ def _extract_ego_yaw_rate(
         time_steps_s,
         deriv_order=deriv_order,
         poly_order=poly_order,
-    )  # convert to seconds
+    )
     return np.round(ego_yaw_rate, decimals=decimals)
 
 
@@ -177,22 +177,13 @@ def _phase_unwrap(
     """
     Phase-unwraps heading angles so successive differences stay within pi radians.
 
-    Returns an array of heading angles equal mod 2 pi to the input heading angles,
-    and such that the difference between successive output angles is less than or
-    equal to pi radians in absolute value.
-
     Args:
         headings: An array of headings (radians)
 
     Returns:
         The phase-unwrapped equivalent headings.
     """
-    # There are some jumps in the heading (e.g. from -np.pi to +np.pi) which causes approximation of yaw to be very large.
-    # We want unwrapped[j] = headings[j] - 2*pi*adjustments[j] for some integer-valued adjustments making the absolute value of
-    # unwrapped[j+1] - unwrapped[j] at most pi:
-    # i.e. -pi <= headings[j+1] - headings[j] - 2*pi*(adjustments[j+1] - adjustments[j]) <= pi
-    # i.e. -1/2 <= (headings[j+1] - headings[j])/(2*pi) - (adjustments[j+1] - adjustments[j]) <= 1/2
-    # So adjustments[j+1] - adjustments[j] = round((headings[j+1] - headings[j]) / (2*pi)).
+    # Each step's adjustment is its heading difference rounded to a whole number of turns.
     two_pi = 2.0 * np.pi
     adjustments = np.zeros_like(headings)
     adjustments[..., 1:] = np.cumsum(
@@ -211,19 +202,15 @@ def _approximate_derivatives(
     axis: int = -1,
 ) -> jt.Float64[npt.NDArray[np.float64], "batch times"]:
     """
-    Approximates the n-th derivative of the function interpolating equally-spaced (x, y) points.
-
-    Given two equal-length sequences y and x, compute an approximation to the n-th
-    derivative of some function interpolating the (x, y) data points, and return its
-    values at the x's. We assume the x's are increasing and equally-spaced.
+    Approximates the n-th derivative of y over equally spaced x with a Savitzky-Golay filter.
 
     Args:
-        y: The dependent variable (say of length n)
-        x: The independent variable (must have the same length n).  Must be strictly increasing and equally-spaced.
-        window_length: The order (default 5) of the Savitsky-Golay filter used. (Ignored if the x's are not equally-spaced.)  Must be odd and at least 3
-        poly_order: The degree (default 2) of the filter polynomial used.  Must be less than the window_length
-        deriv_order: The order of derivative to compute (default 1)
-        axis: The axis of the array x along which the filter is to be applied. Default is -1.
+        y: The dependent variable.
+        x: The independent variable, strictly increasing and equally spaced.
+        window_length: Window length of the filter, capped at the length of x.
+        poly_order: Degree of the filter polynomial, less than window_length.
+        deriv_order: Order of the derivative.
+        axis: Axis of y along which the filter is applied.
 
     Returns:
         Derivatives.

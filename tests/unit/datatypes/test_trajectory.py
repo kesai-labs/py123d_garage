@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
 """Unit tests for the trajectory containers, interpolation and the yaw derivation."""
 
 from __future__ import annotations
@@ -84,18 +87,17 @@ def test_interpolate_yaw_takes_the_short_way_across_pi() -> None:
     assert np.isclose(abs(at_half[2]), math.pi, atol=1e-9)
 
 
-@pytest.mark.xfail(
-    reason="single-pose trajectory silently yields NaN from interp1d",
-    strict=True,
-)
 def test_single_pose_trajectory_interpolates_to_its_pose() -> None:
     trajectory = TrajectorySE2(
         np.array([[1.0, 2.0, 0.5]], dtype=np.float64),
         np.array([_EPOCH_US], dtype=np.int64),
     )
-    with np.errstate(invalid="ignore"):
-        pose = trajectory.interpolate(_EPOCH_US)
-    assert np.allclose(pose, [1.0, 2.0, 0.5], atol=1e-9)
+    assert np.allclose(trajectory.interpolate(_EPOCH_US), [1.0, 2.0, 0.5], atol=1e-9)
+    poses = trajectory.interpolate(np.array([_EPOCH_US, _EPOCH_US], dtype=np.int64))
+    assert poses.shape == (2, 3)
+    assert np.allclose(poses, [[1.0, 2.0, 0.5], [1.0, 2.0, 0.5]], atol=1e-9)
+    with pytest.raises(ValueError, match="beyond the"):
+        trajectory.interpolate(_EPOCH_US + 1)
 
 
 def test_polyline_property_carries_the_poses() -> None:
