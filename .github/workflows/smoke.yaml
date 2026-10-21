@@ -17,7 +17,7 @@ env:
   # https://huggingface.co/kesai-labs/py123d_garage_pretrained_checkpoints, the v0.2.0 publication; every model lives at
   # v0.2.0/<name>/{pretrain,midtrain,posttrain} with its README.md at v0.2.0/<name>, and the smoke drives posttrain.
   CHECKPOINT_REPO: kesai-labs/py123d_garage_pretrained_checkpoints
-  CHECKPOINT_REVISION: afb6b51fce5c9965589dc4776777f90e72594622
+  CHECKPOINT_REVISION: 56edbe90a71a3fd4baee2d5f2f2da0bb7e722364
   # The release checkpoint; the closed-loop jobs and the finetune drive this one.
   RELEASE_CHECKPOINT: ltf-base-joint64-68M
   RELEASE_CHECKPOINT_DIR: v0.2.0/ltf-base-joint64-68M/posttrain

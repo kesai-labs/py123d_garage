@@ -19,7 +19,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, Final, TypeVar, cast
 
 import torch
 import torch.version
@@ -319,6 +319,12 @@ def _norm(tensor: Tensor) -> float:
     return float(tensor.square().sum().sqrt().item())
 
 
+# A gradient smaller than the plain bf16 step's own error from fp32 is rounding noise in both bf16 steps, such as the
+# gradient of a key norm's bias, which softmax cancels; the ratio of two noise norms says nothing about the kernels,
+# so there only a gap of this many times the plain error fails.
+_UNRESOLVED_GRAD_FACTOR: Final[float] = 10.0
+
+
 def compare(
     patched: StepOutcome,
     plain: StepOutcome,
@@ -330,7 +336,8 @@ def compare(
     """
     Compares a patched step with the plain one: the patched loss within loss_rtol of the plain loss, and every patched
     gradient at most grad_factor times as far from the fp32 reference gradient as the plain gradient is, plus grad_floor
-    times the norm of that parameter's reference gradient.
+    times the norm of that parameter's reference gradient. A parameter whose reference gradient is smaller than the plain
+    gradient's error is unresolved in bf16 and gets _UNRESOLVED_GRAD_FACTOR instead of grad_factor.
 
     Args:
         patched: the patched policy's step
@@ -361,14 +368,16 @@ def compare(
         patched_error = _norm(patched.gradients[name] - reference.gradients[name])
         plain_error = _norm(plain.gradients[name] - reference.gradients[name])
         reference_norm = _norm(reference.gradients[name])
-        margin = patched_error / max(grad_factor * plain_error + grad_floor * reference_norm, 1e-30)
+        factor = grad_factor if reference_norm >= plain_error else max(grad_factor, _UNRESOLVED_GRAD_FACTOR)
+        margin = patched_error / max(factor * plain_error + grad_floor * reference_norm, 1e-30)
         if margin > worst_margin:
             worst_parameter, worst_margin = name, margin
             worst_patched_error, worst_plain_error = patched_error, plain_error
         if margin > 1.0:
             failures.append(
                 f"{name}: {patched_error:.3g} from the fp32 gradient with the patches, {plain_error:.3g} without; "
-                f"allowed kernel_check_grad_factor {grad_factor:.3g} x {plain_error:.3g} + kernel_check_grad_floor "
+                f"allowed {'kernel_check_grad_factor' if factor == grad_factor else 'an unresolved gradient'} "
+                f"{factor:.3g} x {plain_error:.3g} + kernel_check_grad_floor "
                 f"{grad_floor:.3g} x {reference_norm:.3g}",
             )
     return Comparison(loss_error, worst_parameter, worst_margin, worst_patched_error, worst_plain_error, failures)

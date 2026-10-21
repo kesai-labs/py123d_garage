@@ -199,7 +199,8 @@ class TrainingConfig:
     # Tolerance of the patched loss, relative to the plain policy's loss.
     kernel_check_loss_rtol: float = 1e-2
     # A patched gradient may lie this many times further from the fp32 gradient than the plain policy's gradient
-    # does, plus this fraction of the norm of that parameter's fp32 gradient.
+    # does, plus this fraction of the norm of that parameter's fp32 gradient. A gradient smaller than the plain
+    # policy's error, which bf16 cannot resolve, may lie up to 10 times further.
     kernel_check_grad_factor: float = 2.0
     kernel_check_grad_floor: float = 2e-2
     # End the run on a mismatch; false logs it and trains.

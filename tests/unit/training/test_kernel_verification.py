@@ -168,6 +168,20 @@ def test_compare_flags_the_loss_and_the_gradients_outside_the_tolerances() -> No
     assert [failure.split(":")[0] for failure in without_floor.failures] == ["a", "tiny"]
 
 
+def test_compare_allows_more_noise_on_a_gradient_below_the_bf16_error() -> None:
+    # A key norm's bias: softmax cancels it, so its fp32 gradient is ~0 and both bf16 gradients are rounding noise.
+    reference = _outcome(1.0, {"a": [1.0, 0.0], "key_bias": [1e-9, 0.0]})
+    plain = _outcome(1.0, {"a": [1.01, 0.0], "key_bias": [3e-6, 0.0]})
+    noise = compare(_outcome(1.0, {"a": [1.01, 0.0], "key_bias": [6.3e-6, 0.0]}), plain, reference, 1e-2, 2.0, 2e-2)
+    assert noise.failures == []
+    broken = compare(_outcome(1.0, {"a": [1.01, 0.0], "key_bias": [5e-5, 0.0]}), plain, reference, 1e-2, 2.0, 2e-2)
+    assert [failure.split(":")[0] for failure in broken.failures] == ["key_bias"]
+    assert "an unresolved gradient 10" in broken.failures[0]
+    resolved = compare(_outcome(1.0, {"a": [1.05, 0.0], "key_bias": [3e-6, 0.0]}), plain, reference, 1e-2, 2.0, 2e-2)
+    assert [failure.split(":")[0] for failure in resolved.failures] == ["a"]
+    assert "kernel_check_grad_factor 2" in resolved.failures[0]
+
+
 def perturb_backbone(backbone: nn.Module) -> None:
     """A patch at fault: scales every output of the backbone by five percent."""
 
