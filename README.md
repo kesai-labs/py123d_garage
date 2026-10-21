@@ -37,21 +37,23 @@ Under active development: more datasets, benchmarks and baselines will follow. C
 
 ## Results
 
-Closed-loop AlpaSim results of [ltf-base-joint64-68M v0.2.0](https://huggingface.co/kesai-labs/py123d_garage_pretrained_checkpoints/tree/main/v0.2.0/ltf-base-joint64-68M) on both challenge tracks: the 441 `nurec_curated_val` scenes of the Physical AI track and the 1485 scenes of the nuPlan track. The policy replans at 2 Hz without post-processing and takes over after 1.7 s on Physical AI, with the NuRec harmonizer on, and after the fixed 0.5 s on nuPlan. AlpaSim commit [e121e59](https://github.com/NVlabs/alpasim/commit/e121e59141dc391f6c295513d6dadc840a419149), mean ± std over three training seeds. Unconditional drives without navigational intent, conditional with target points 40, 60 and 80 m ahead.
+Closed-loop AlpaSim results of [ltf-base-joint64-68M v0.2.0](https://huggingface.co/kesai-labs/py123d_garage_pretrained_checkpoints/tree/main/v0.2.0/ltf-base-joint64-68M) on both challenge tracks, mean ± std over three training seeds. The unconditional TransFuser drives without navigational intent to stay comparable with Alpamayo, while the conditional TransFuser consumes target points 40, 60 and 80 m ahead. [Alpamayo 1](https://huggingface.co/nvidia/Alpamayo-R1-10B) and [Alpamayo 1.5](https://huggingface.co/nvidia/Alpamayo-1.5-10B) run in their native setting, 10 Hz with four cameras and no route, over three sampled rollouts.
 
 <div align="center">
 
-| Physical AI   |    Score ↑ | km/incident ↑ | Offroad ↓ | Collision ↓ | Corridor ↓ | Progress ↓ |
-| :------------ | ---------: | ------------: | --------: | ----------: | ---------: | ---------: |
-| Unconditional | 63.9 ± 1.5 |   1.25 ± 0.10 |     6.9 % |       6.8 % |     15.2 % |     16.4 % |
-| Conditional   | 76.0 ± 0.8 |   1.34 ± 0.12 |     6.7 % |       6.8 % |      3.1 % |     17.2 % |
+| Physical AI   |        Score ↑ |   km/incident ↑ | Offroad ↓ | Collision ↓ | Corridor ↓ | Progress ↓ |
+| :------------ | -------------: | --------------: | --------: | ----------: | ---------: | ---------: |
+| Alpamayo 1    |     56.0 ± 1.0 |     0.96 ± 0.05 |    10.3 % |       5.4 % |     24.3 % |     10.2 % |
+| Alpamayo 1.5  |     55.3 ± 0.7 |     0.94 ± 0.06 |    11.3 % |   **5.2 %** |     25.4 % |  **8.0 %** |
+| Unconditional |     63.9 ± 1.5 |     1.25 ± 0.10 |     6.9 % |       6.8 % |     15.2 % |     16.4 % |
+| Conditional   | **76.0 ± 0.8** | **1.34 ± 0.12** | **6.7 %** |       6.8 % |  **3.1 %** |     17.2 % |
 
-| nuPlan        |    Score ↑ | km/incident ↑ | Offroad ↓ | Collision ↓ | Corridor ↓ | Progress ↓ |
-| :------------ | ---------: | ------------: | --------: | ----------: | ---------: | ---------: |
-| Unconditional | 89.5 ± 0.9 |   0.63 ± 0.07 |     3.9 % |       0.3 % |      1.1 % |     11.5 % |
-| Conditional   | 91.4 ± 1.0 |   0.75 ± 0.11 |     3.3 % |       0.2 % |      0.0 % |     11.4 % |
+| nuPlan        |        Score ↑ |   km/incident ↑ | Offroad ↓ | Collision ↓ | Corridor ↓ | Progress ↓ |
+| :------------ | -------------: | --------------: | --------: | ----------: | ---------: | ---------: |
+| Unconditional |     89.5 ± 0.9 |     0.63 ± 0.07 |     3.9 % |       0.3 % |      1.1 % |     11.5 % |
+| Conditional   | **91.4 ± 1.0** | **0.75 ± 0.11** | **3.3 %** |   **0.2 %** |  **0.0 %** | **11.4 %** |
 
-<sub>Score: AlpaSim score, 0 to 100. km/incident: km per at-fault incident. Offroad, Collision, Corridor: share of scenes ending in that failure. Progress: share of scenes under 80 % of the logged progress.</sub>
+<sub>Score: AlpaSim score, 0 to 100. km/incident: km per at-fault incident. Offroad, Collision, Corridor: share of scenes ending in that failure. Progress: share of scenes under 80 % of the logged progress. The TransFuser policy replans at 2 Hz without post-processing and with the NuRec harmonizer on. AlpaSim is pinned to commit [e121e59](https://github.com/NVlabs/alpasim/commit/e121e59141dc391f6c295513d6dadc840a419149) </sub>
 
 </div>
 
