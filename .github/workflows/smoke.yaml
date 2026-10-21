@@ -297,7 +297,7 @@ jobs:
       - name: Stop this runner's simulation containers and prune what no job uses
         if: always()
         run: |
-          docker ps -aq --filter "name=^ci-${RUNNER_NAME,,}-" | xargs -r docker rm -f
+          docker ps -aq --filter "name=^ci-${GITHUB_REPOSITORY##*/}-${RUNNER_NAME,,}-" | xargs -r docker rm -f
           docker network prune -f || true
           docker image prune -f || true
           docker builder prune -f --filter until=72h || true
@@ -344,7 +344,7 @@ jobs:
       - name: Stop this runner's simulation containers and prune what no job uses
         if: always()
         run: |
-          docker ps -aq --filter "name=^ci-${RUNNER_NAME,,}-" | xargs -r docker rm -f
+          docker ps -aq --filter "name=^ci-${GITHUB_REPOSITORY##*/}-${RUNNER_NAME,,}-" | xargs -r docker rm -f
           docker network prune -f || true
           docker image prune -f || true
           docker builder prune -f --filter until=72h || true
@@ -384,7 +384,7 @@ jobs:
       - name: Stop this runner's simulation containers and prune what no job uses
         if: always()
         run: |
-          docker ps -aq --filter "name=^ci-${RUNNER_NAME,,}-" | xargs -r docker rm -f
+          docker ps -aq --filter "name=^ci-${GITHUB_REPOSITORY##*/}-${RUNNER_NAME,,}-" | xargs -r docker rm -f
           docker network prune -f || true
           docker image prune -f || true
           docker builder prune -f --filter until=72h || true

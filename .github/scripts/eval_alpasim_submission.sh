@@ -20,7 +20,7 @@ _tag="ci-$(basename "$(dirname "${_checkpoint_file}")")"
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 # Port-block locks live under /tmp so every runner user sees them and parallel jobs never collide.
 mkdir -p /tmp/py123d_garage_dev_ports && chmod 1777 /tmp/py123d_garage_dev_ports 2>/dev/null || true
-_project="ci-${RUNNER_NAME:-local}"
+_project="ci-${GITHUB_REPOSITORY##*/}-${RUNNER_NAME:-local}"
 _project="${_project,,}"
 
 # Containers of this runner's previous job, and of any job that died on this machine; jobs cap at 150 min.
