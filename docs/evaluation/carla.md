@@ -11,7 +11,7 @@
 
 Policies for CARLA train on the [LEAD data](../data/carla.md).
 
-Install the simulator once into `lib/carla/simulator/`, then start a headless server:
+Install the simulator once into `lib/carla/simulator/`, with the Bench2Drive and CARLA leaderboards cloned at pinned commits into `lib/carla/benchmark/` and patched, then start a headless server:
 
 ```bash
 lib/carla/tools/setup_carla.sh

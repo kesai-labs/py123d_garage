@@ -193,22 +193,24 @@ class TrainingConfig:
     # the first step.
     compile_ahead: bool = False
     # Before training, run one forward and backward of policy 0 with its kernel patches and of a plain torch policy
-    # with the same weights on the first batch, in the step's precision and once more in fp32, and compare the loss
-    # and every gradient; nothing runs without patches.
+    # with the same weights on kernel_check_num_batches batches of the first source, in the step's precision and once
+    # more in fp32, and compare the losses and every module's gradients; nothing runs without patches.
     kernel_check: bool = True
-    # Tolerance of the patched loss, relative to the plain policy's loss.
+    # Batches of the check; the median over them keeps one batch's rounding noise from deciding.
+    kernel_check_num_batches: int = 8
+    # Tolerance of the patched loss on every batch, relative to the plain policy's loss.
     kernel_check_loss_rtol: float = 1e-2
-    # A patched gradient may lie this many times further from the fp32 gradient than the plain policy's gradient
-    # does, plus this fraction of the norm of that parameter's fp32 gradient. A gradient smaller than the plain
-    # policy's error, which bf16 cannot resolve, may lie up to 10 times further.
-    kernel_check_grad_factor: float = 2.0
-    kernel_check_grad_floor: float = 2e-2
-    # End the run on a mismatch; false logs it and trains.
+    # Per module (a parameter name's first two parts), the patched gradient's distance from the fp32 gradient over the
+    # plain policy's, by the median over the batches: above the warn factor the check warns, above the refuse factor
+    # it fails. Two plain bf16 steps that differ only in memory layout reach 2 here.
+    kernel_check_warn_factor: float = 2.0
+    kernel_check_refuse_factor: float = 3.0
+    # End the run when the check fails; false logs it and trains.
     kernel_check_refuse: bool = True
-    # End the run when a requested patch's kernels do not run in the check: the GPU, the kernel build or its libraries
-    # rule them out, the batch falls outside what they handle, or another patch replaces them; false logs it and trains
-    # on the torch path.
-    kernel_check_require_patches: bool = True
+    # Whether every requested patch's kernels must run in the check. False runs the patches as fast paths: a call that
+    # the GPU, the kernel build, its libraries, the shapes or another patch rule out runs the torch path, and the
+    # kernel report says why; true ends the run instead.
+    kernel_check_require_patches: bool = False
     # With more than one seed, seconds without a finished step before the rank aborts, so a hang ends the job.
     step_watchdog_timeout_s: float = 3600.0
     # Seconds the shutdown after training may take before the rank exits on its own.

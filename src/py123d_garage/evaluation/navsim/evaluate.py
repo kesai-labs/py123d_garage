@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from typing import cast
 
 import hydra
+import pandas as pd
 from omegaconf import DictConfig
 from py123d.api import SceneAPI
 from py123d.common.execution import executor_map_chunked_list
@@ -92,6 +93,7 @@ def main(cfg: DictConfig) -> None:
     py123d_garage_policy.to(parallelization.device)
 
     results: list[dict[str, object]] = []
+    trajectory_rows: list[dict[str, object]] = []
     for source in benchmark_config.benchmark_offline_data_sources:
         scenes = build_source_scenes(
             source,
@@ -112,6 +114,16 @@ def main(cfg: DictConfig) -> None:
             output_dir / "visualizations" if benchmark_config.save_visualizations else None,
             nan_past_route_end=not benchmark_config.scored_scene_needs_route,
         )
+        if benchmark_config.save_trajectories:
+            trajectory_rows.extend(
+                {
+                    "scene_uuid": scene.scene_uuid,
+                    "log_name": scene.log_name,
+                    "timestamps_us": trajectory.timestamps_us.tolist(),
+                    "poses_se2": trajectory.pose_se2_array.tolist(),
+                }
+                for scene, trajectory in zip(scenes, trajectories, strict=True)
+            )
         LOG.info("Running Scoring")
         results.extend(
             executor_map_chunked_list(
@@ -125,6 +137,13 @@ def main(cfg: DictConfig) -> None:
             ),
         )
 
+    if benchmark_config.save_trajectories:
+        trajectories_dir = output_dir / "trajectories"
+        trajectories_dir.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(trajectory_rows).to_parquet(
+            trajectories_dir / f"trajectories_{parallelization.shard_index:05d}.parquet",
+            index=False,
+        )
     save_shard_results(results, str(output_dir), parallelization.shard_index)
     merge_results_if_last_shard(
         str(output_dir),

@@ -19,7 +19,6 @@ if not torch.cuda.is_available():
 pytest.importorskip("py123d_garage_cuda")
 
 from py123d_garage_cuda.transfuser.registry import family_of, unsupported_reason
-from py123d_garage_cuda.transfuser.resnet import HALO_ENGINE
 
 _ops = torch.ops.py123d_garage_cuda
 _NAMESPACE = "py123d_garage_cuda::"
@@ -89,44 +88,6 @@ def _resnet_stem_pool_backward() -> tuple[object, ...]:
     y, values, norm_weight, norm_bias = _stem_pool_inputs()
     out, offsets = _ops.resnet_stem_pool(y.detach(), values, norm_weight.detach(), norm_bias.detach())
     return torch.randn_like(out), y.detach(), offsets, values, norm_weight.detach()
-
-
-def _pinned_conv() -> tuple[object, ...]:
-    x, weight = _channels_last(2, 64, 16, 8, grad=True), _channels_last(64, 64, 3, 3, grad=True)
-    return x, weight, [1, 1], [1, 1], [HALO_ENGINE] * 3, [], [], []
-
-
-def _pinned_conv_data_grad() -> tuple[object, ...]:
-    return _channels_last(2, 64, 16, 8), _channels_last(64, 64, 3, 3), [2, 64, 16, 8], [1, 1], [1, 1], HALO_ENGINE, []
-
-
-def _pinned_conv_weight_grad() -> tuple[object, ...]:
-    return _channels_last(2, 64, 16, 8), _channels_last(2, 64, 16, 8), [64, 64, 3, 3], [1, 1], [1, 1], -1, []
-
-
-def _regnet_grouped_conv() -> tuple[object, ...]:
-    return _channels_last(2, 72, 12, 10, grad=True), _dense(72, 24, 3, 3, dtype=torch.float32, grad=True), 1
-
-
-def _regnet_grouped_conv_backward() -> tuple[object, ...]:
-    return _channels_last(2, 72, 12, 10), _channels_last(2, 72, 12, 10), _dense(72, 24, 3, 3, dtype=torch.float32), 1
-
-
-def _bn_relu_inputs(grad: bool) -> tuple[object, ...]:
-    y = _channels_last(2, 72, 12, 10, grad=grad)
-    scale = (torch.rand(72, device="cuda") + 0.5).requires_grad_(grad)
-    shift = (torch.randn(72, device="cuda") * 0.5).requires_grad_(grad)
-    center = y.detach().float().mean((0, 2, 3))
-    weight = (torch.randn(72, 24, 3, 3, device="cuda") / 8).requires_grad_(grad)
-    return y, scale, shift, center, weight, 1
-
-
-def _regnet_bn_relu_grouped_conv() -> tuple[object, ...]:
-    return _bn_relu_inputs(grad=True)
-
-
-def _regnet_bn_relu_grouped_conv_backward() -> tuple[object, ...]:
-    return _channels_last(2, 72, 12, 10), *_bn_relu_inputs(grad=False)
 
 
 def _attention_inputs() -> tuple[torch.Tensor, torch.Tensor, list[torch.Tensor], torch.Tensor]:
@@ -233,13 +194,6 @@ EXAMPLES: dict[str, Callable[[], tuple[object, ...]]] = {
     "batch_norm_finalize": _batch_norm_finalize,
     "resnet_stem_pool": _resnet_stem_pool,
     "resnet_stem_pool_backward": _resnet_stem_pool_backward,
-    "pinned_conv": _pinned_conv,
-    "pinned_conv_data_grad": _pinned_conv_data_grad,
-    "pinned_conv_weight_grad": _pinned_conv_weight_grad,
-    "regnet_grouped_conv": _regnet_grouped_conv,
-    "regnet_grouped_conv_backward": _regnet_grouped_conv_backward,
-    "regnet_bn_relu_grouped_conv": _regnet_bn_relu_grouped_conv,
-    "regnet_bn_relu_grouped_conv_backward": _regnet_bn_relu_grouped_conv_backward,
     "planner_attention": _planner_attention,
     "planner_attention_backward": _planner_attention_backward,
     "planner_attention_backward_shared_bytes": _planner_attention_backward_shared_bytes,

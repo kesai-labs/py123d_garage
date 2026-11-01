@@ -18,9 +18,17 @@ def test_every_module_imports() -> None:
         try:
             importlib.import_module(module_info.name)
         except ModuleNotFoundError as error:  # noqa: PERF203
-            # The CARLA and AlpaSim evaluation modules import packages that only
-            # those simulators' runtimes provide; the custom kernels need Triton.
-            if error.name not in ("carla", "leaderboard", "alpasim_driver", "alpasim_grpc", "triton"):
+            # The CARLA, AlpaSim, Odyssey and HUGSIM evaluation modules import packages that only
+            # those simulators' checkouts provide; the custom kernels need Triton.
+            if error.name not in (
+                "carla",
+                "leaderboard",
+                "alpasim_driver",
+                "alpasim_grpc",
+                "odyssey_bridge",
+                "agents",
+                "triton",
+            ):
                 failures.append(f"{module_info.name}: {error!r}")
         except Exception as error:
             failures.append(f"{module_info.name}: {error!r}")

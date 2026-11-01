@@ -30,13 +30,12 @@ from py123d_garage.common.config_help import import_string
 from py123d_garage.config.schema.policy.transfuser_config import BackboneConfig, TransfuserConfig
 from py123d_garage.policy.transfuser.network.decoder.flow_planning_decoder import AdaptiveNormTransformerDecoder
 from py123d_garage.policy.transfuser.network.encoder.transfuser import TransfuserBackbone
-from py123d_garage.training.kernel_verification import StepOutcome, compare, exact_fp32
+from py123d_garage.training.kernel_verification import StepOutcome, batch_errors, compare, exact_fp32
 from tests.cuda_unit.transfuser.test_planner import _planner_masks
 from tests.unit.policy.transfuser.test_transfuser_forward import _small_geometry, config  # noqa: F401
 
 _CUDA = "py123d_garage_cuda.transfuser"
 _FACTOR = 2.0
-_FLOOR = 1e-3
 
 
 @dataclass(frozen=True)
@@ -92,10 +91,7 @@ CASES: dict[str, Case] = {
     f"{_CUDA}.planner:patch_planner_attention": Case(_decoder, _decoder_inputs, 0.1),
     f"{_CUDA}.planner:patch_planner_swiglu": Case(_decoder, _decoder_inputs, 0.1),
     f"{_CUDA}.planner:patch_planner_feed_forward": Case(_decoder, _decoder_inputs, 0.1),
-    f"{_CUDA}.regnet:patch_grouped_convs": Case(_backbone("regnety_032"), _backbone_inputs, 0.1),
-    f"{_CUDA}.regnet:patch_regnet_blocks": Case(_backbone("regnety_032"), _backbone_inputs, 0.1),
     f"{_CUDA}.resnet:fuse_stem": Case(_backbone("resnet34"), _backbone_inputs, 0.1),
-    f"{_CUDA}.resnet:pin_conv_engines": Case(_backbone("resnet34"), _backbone_inputs, 0.1),
 }
 
 
@@ -163,7 +159,9 @@ def test_patch_keeps_state_changes_module_once_and_matches_plain(
         reference = _step(plain, inputs, nullcontext)
     plain_outcome = _step(plain, inputs, _autocast)
     patched_outcome = _step(patched, inputs, _autocast)
-    comparison = compare(patched_outcome, plain_outcome, reference, 1e-2, _FACTOR, _FLOOR)
+    # One fixed batch per patch, so the bound is the warn factor: a module may lie at most _FACTOR times as far from
+    # fp32 with the patch as without.
+    comparison = compare([batch_errors(patched_outcome, plain_outcome, reference)], 1e-2, _FACTOR, _FACTOR)
     assert comparison.failures == [], comparison.failures
 
 

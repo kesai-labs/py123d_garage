@@ -2,14 +2,16 @@
 # Copyright (c) 2026 KE:SAI
 
 """
-The kernel check finds every kernel_patches list of a config, zeroes and restores dropouts, compares a patched step
-with the plain one within the tolerances, names the patch at fault and leaves the policy as it found it.
+The kernel check finds every kernel_patches list of a config, zeroes and restores dropouts, compares the patched steps
+with the plain ones per module by the median over batches, names the patch at fault and leaves the policy as it found
+it.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,9 +27,12 @@ from py123d_garage.config.schema.training.training_config import TrainingConfig
 from py123d_garage.policy.transfuser.transfuser_policy import TransfuserPolicy
 from py123d_garage.training.concurrent_seeds_training import SeedInputs
 from py123d_garage.training.kernel_verification import (
+    BatchErrors,
     StepOutcome,
+    batch_errors,
     compare,
     kernel_patches_of,
+    module_of,
     patches_not_running,
     verify_kernel_patches,
     with_kernel_patches,
@@ -138,48 +143,57 @@ def _outcome(loss: float, gradients: dict[str, list[float]]) -> StepOutcome:
     return StepOutcome(loss, {name: torch.tensor(values) for name, values in gradients.items()}, set())
 
 
-def test_compare_flags_the_loss_and_the_gradients_outside_the_tolerances() -> None:
-    reference = _outcome(
-        1.0,
-        {"a": [1.0, 0.0], "b": [0.0, 2.0], "c": [1.0, 1.0], "tiny": [1e-4, 0.0], "unused": [0.0]},
-    )
-    plain = _outcome(
-        1.001,
-        {"a": [1.01, 0.0], "b": [0.0, 2.02], "c": [1.0, 1.0], "tiny": [1.5e-4, 0.0], "unused": [0.0]},
-    )
-    close = {"a": [0.985, 0.0], "b": [0.0, 1.98], "c": [1.0, 1.0], "tiny": [1.6e-4, 0.0], "unused": [0.0]}
-    same = compare(_outcome(1.005, close), plain, reference, 1e-2, 2.0, 1e-3)
-    assert same.failures == []
-    assert same.worst_parameter == "a"
-    assert same.worst_margin == pytest.approx(0.015 / (2.0 * 0.01 + 1e-3 * 1.0))
-    hidden = compare(_outcome(1.005, {**close, "tiny": [3e-4, 0.0]}), plain, reference, 1e-2, 2.0, 1e-3)
-    assert [failure.split(":")[0] for failure in hidden.failures] == ["tiny"]
-    moved = {"a": [1.0, 0.0], "b": [0.0, 2.2], "d": [1.0], "tiny": [1e-4, 0.0], "unused": [0.0]}
-    off = compare(_outcome(1.1, moved), plain, reference, 1e-2, 2.0, 1e-3)
-    assert [failure.split(":")[0] for failure in off.failures] == [
-        "loss 1.1 with the patches, 1.001 without",
-        "b",
-        "c",
-        "d",
+def test_batch_errors_take_the_norm_over_each_module_and_name_the_problems() -> None:
+    assert module_of("center_net_decoder.wh_head.2.weight") == "center_net_decoder.wh_head"
+    reference = _outcome(1.0, {"head.a.weight": [1.0, 0.0], "head.a.bias": [0.0], "head.b": [2.0], "other.c": [1.0]})
+    plain = _outcome(1.001, {"head.a.weight": [1.03, 0.0], "head.a.bias": [0.04], "head.b": [2.0], "other.c": [1.0]})
+    patched = _outcome(1.002, {"head.a.weight": [1.0, 0.06], "head.a.bias": [0.08], "head.b": [2.0], "extra": [1.0]})
+
+    errors = batch_errors(patched, plain, reference)
+
+    assert errors.plain["head.a"] == pytest.approx(0.05)
+    assert errors.patched["head.a"] == pytest.approx(0.1)
+    assert errors.patched["head.b"] == errors.plain["head.b"] == 0.0
+    assert errors.problems == [
+        "extra: a gradient only with the patches",
+        "other.c: a gradient only with no patches and fp32",
     ]
-    assert off.worst_parameter == "b"
-    assert "only with no patches and fp32" in off.failures[2]
-    without_floor = compare(_outcome(1.0, close), plain, reference, 1e-2, 1.0, 0.0)
-    assert [failure.split(":")[0] for failure in without_floor.failures] == ["a", "tiny"]
+    same = _outcome(1.0, {"head.a.weight": [1.0, 0.0]})
+    broken = batch_errors(_outcome(math.nan, {"head.a.weight": [math.inf, 0.0]}), same, same)
+    assert broken.problems == ["loss nan with the patches", "head.a.weight: a non-finite gradient with the patches"]
 
 
-def test_compare_allows_more_noise_on_a_gradient_below_the_bf16_error() -> None:
-    # A key norm's bias: softmax cancels it, so its fp32 gradient is ~0 and both bf16 gradients are rounding noise.
-    reference = _outcome(1.0, {"a": [1.0, 0.0], "key_bias": [1e-9, 0.0]})
-    plain = _outcome(1.0, {"a": [1.01, 0.0], "key_bias": [3e-6, 0.0]})
-    noise = compare(_outcome(1.0, {"a": [1.01, 0.0], "key_bias": [6.3e-6, 0.0]}), plain, reference, 1e-2, 2.0, 2e-2)
-    assert noise.failures == []
-    broken = compare(_outcome(1.0, {"a": [1.01, 0.0], "key_bias": [5e-5, 0.0]}), plain, reference, 1e-2, 2.0, 2e-2)
-    assert [failure.split(":")[0] for failure in broken.failures] == ["key_bias"]
-    assert "an unresolved gradient 10" in broken.failures[0]
-    resolved = compare(_outcome(1.0, {"a": [1.05, 0.0], "key_bias": [3e-6, 0.0]}), plain, reference, 1e-2, 2.0, 2e-2)
-    assert [failure.split(":")[0] for failure in resolved.failures] == ["a"]
-    assert "kernel_check_grad_factor 2" in resolved.failures[0]
+def _batch(ratios: dict[str, float], patched_loss: float = 1.0) -> BatchErrors:
+    """A batch whose every module lies ratio times as far from fp32 with the patches as without."""
+    patched = {module: 0.01 * ratio for module, ratio in ratios.items()}
+    return BatchErrors(patched_loss, 1.0, patched, dict.fromkeys(ratios, 0.01), [])
+
+
+def test_compare_decides_on_the_median_over_batches_not_on_one_batch() -> None:
+    # One batch's rounding can put a small module 20 times as far from fp32; the median over the batches does not.
+    ratios = {"heads.noisy": 1.1, "heads.drift": 2.5, "heads.wrong": 3.5, "backbone.encoder": 1.0}
+    batches = [_batch(ratios | {"heads.noisy": 20.0})] + [_batch(ratios) for _ in range(4)]
+
+    comparison = compare(batches, 1e-2, 2.0, 3.0)
+
+    assert comparison.module_ratios == pytest.approx(ratios)
+    assert [failure.split(":")[0] for failure in comparison.failures] == ["heads.wrong"]
+    assert "over kernel_check_refuse_factor 3" in comparison.failures[0]
+    assert [warning.split(":")[0] for warning in comparison.warnings] == ["heads.drift"]
+    assert (comparison.worst_module, comparison.worst_ratio) == ("heads.wrong", pytest.approx(3.5))
+
+
+def test_compare_fails_on_any_batch_whose_loss_is_off_and_on_any_batch_problem() -> None:
+    off = compare([_batch({"a.b": 1.0}), _batch({"a.b": 1.0}, patched_loss=1.02)], 1e-2, 2.0, 3.0)
+    assert off.failures == [
+        "batch 1: loss 1.02 with the patches, 1 without: relative error 0.02 over kernel_check_loss_rtol 0.01",
+    ]
+    assert off.loss_error == pytest.approx(0.02)
+    broken = _batch({"a.b": 1.0})
+    broken.problems.append("a.b.weight: a non-finite gradient with the patches")
+    assert compare([broken], 1e-2, 2.0, 3.0).failures == ["batch 0: a.b.weight: a non-finite gradient with the patches"]
+    assert compare([BatchErrors(1.0, 1.0, {"a.b": 0.0}, {"a.b": 0.0}, [])], 1e-2, 2.0, 3.0).failures == []
+    assert compare([BatchErrors(1.0, 1.0, {"a.b": 0.1}, {"a.b": 0.0}, [])], 1e-2, 2.0, 3.0).worst_ratio == math.inf
 
 
 def perturb_backbone(backbone: nn.Module) -> None:
@@ -220,10 +234,10 @@ def _autocast() -> AbstractContextManager[None]:
     return cast(AbstractContextManager[None], torch.autocast("cuda", dtype=torch.bfloat16))
 
 
-def _inputs(training_config: TrainingConfig) -> SeedInputs:
+def _inputs(training_config: TrainingConfig, seed: int = 1) -> SeedInputs:
     transfuser = training_config.policy_config.transfuser_config
     assert transfuser is not None
-    torch.manual_seed(1)
+    torch.manual_seed(seed)
     return (
         _features(transfuser, 2).to("cuda"),
         _labels(transfuser, batch_size=2).to("cuda"),
@@ -231,18 +245,21 @@ def _inputs(training_config: TrainingConfig) -> SeedInputs:
     )
 
 
+def _batches(training_config: TrainingConfig) -> list[SeedInputs]:
+    return [_inputs(training_config, seed) for seed in (1, 2, 3)]
+
+
 def _check(
     policy: TransfuserPolicy,
     training_config: TrainingConfig,
     report_file: Path,
-    inputs: SeedInputs | None = None,
+    inputs: list[SeedInputs] | None = None,
 ) -> dict[str, Any]:
-    if inputs is None:
-        inputs = _inputs(training_config)
+    batches = _batches(training_config) if inputs is None else inputs
     return verify_kernel_patches(
         policy,
         training_config,
-        inputs,
+        batches,
         policy.loss_weights(0),
         _autocast,
         torch.device("cuda", 0),
@@ -253,7 +270,7 @@ def _check(
 @_needs_gpu
 def test_a_torch_only_patch_verifies_and_leaves_the_policy_as_found(config: TransfuserConfig, tmp_path: Path) -> None:  # noqa: F811
     policy, training_config = _policy_and_config(config, [_FUSE_QKV])
-    inputs = _inputs(training_config)
+    inputs = _batches(training_config)
     buffers = {name: buffer.clone() for name, buffer in policy.named_buffers()}
     cuda_rng, cpu_rng = torch.cuda.get_rng_state(), torch.random.get_rng_state()
     report_file = tmp_path / "kernel_report.json"
@@ -263,7 +280,9 @@ def test_a_torch_only_patch_verifies_and_leaves_the_policy_as_found(config: Tran
     assert report["status"] == "verified"
     assert report["failures"] == []
     assert json.loads(report_file.read_text())["patches"][0]["patch"] == _FUSE_QKV
-    assert report["gradients"]["worst_margin"] < 1.0
+    assert report["warnings"] == []
+    assert report["batches"] == 3
+    assert report["gradients"]["worst_ratio"] < training_config.kernel_check_warn_factor
     for name, buffer in policy.named_buffers():
         torch.testing.assert_close(buffer, buffers[name], rtol=0, atol=0)
     assert all(parameter.grad is None for parameter in policy.parameters())

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import os
 
+os.environ.setdefault("NUMBA_NUM_THREADS", "1")
+
 if os.environ.get("PY123D_GARAGE_RUNTIME_TYPE_CHECKING", "false").lower() == "true":
     from jaxtyping import install_import_hook
 

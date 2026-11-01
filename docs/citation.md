@@ -19,7 +19,7 @@ If you use this software, please cite it as follows:
 
 ## Baselines
 
-The policy baselines build on [LEAD TransFuser v6](https://github.com/kesai-labs/lead) (TransFuser) and [VideoActionModel](https://github.com/valeoai/VideoActionModel) (VaVAM). If you use them, please also cite:
+The policy baselines build on [LEAD TransFuser v6](https://github.com/kesai-labs/lead) (TransFuser). If you use them, please also cite:
 
 ```bibtex
 @inproceedings{Nguyen2026CVPR,
@@ -28,18 +28,11 @@ The policy baselines build on [LEAD TransFuser v6](https://github.com/kesai-labs
   booktitle={Conference on Computer Vision and Pattern Recognition (CVPR)},
   year={2026}
 }
-
-@article{vavam2025,
-  title={VaViM and VaVAM: Autonomous Driving through Video Generative Modeling},
-  author={Bartoccioni, Florent and Ramzi, Elias and Besnier, Victor and Venkataramanan, Shashanka and Vu, Tuan-Hung and Xu, Yihong and Chambon, Loick and Gidaris, Spyros and Odabas, Serkan and Hurych, David and Marlet, Renaud and Boulch, Alexandre and Chen, Mickael and Zablocki, Eloi and Bursuc, Andrei and Valle, Eduardo and Cord, Matthieu},
-  journal={arXiv preprint arXiv:2502.15672},
-  year={2025}
-}
 ```
 
 ## Benchmarks
 
-The closed-loop and open-loop evaluations build on [AlpaSim](https://github.com/NVlabs/alpasim), [CARLA](https://carla.org) and [NAVSIM](https://github.com/autonomousvision/navsim); the AlpaSim nuPlan track renders its scenes with [World Engine](https://arxiv.org/abs/2606.19836). If you report their scores, please also cite:
+The closed-loop and open-loop evaluations build on [AlpaSim](https://github.com/NVlabs/alpasim), [CARLA](https://carla.org), [NAVSIM](https://github.com/autonomousvision/navsim) v1 and v2, [HUGSIM](https://github.com/hyzhou404/HUGSIM) and [Odyssey](https://github.com/SNU-ADR/Odyssey); the AlpaSim nuPlan track renders its scenes with [World Engine](https://arxiv.org/abs/2606.19836), and HUGSIM runs through valeo.ai's fork [HUGSIM_garage](https://github.com/valeoai/HUGSIM_garage). If you report their scores, please also cite:
 
 ```bibtex
 @software{alpasim2025,
@@ -62,6 +55,27 @@ The closed-loop and open-loop evaluations build on [AlpaSim](https://github.com/
   author={Daniel Dauner and Marcel Hallgarten and Tianyu Li and Xinshuo Weng and Zhiyu Huang and Zetong Yang and Hongyang Li and Igor Gilitschenski and Boris Ivanovic and Marco Pavone and Andreas Geiger and Kashyap Chitta},
   booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
   year={2024}
+}
+
+@inproceedings{Cao2025CORL,
+  title={Pseudo-Simulation for Autonomous Driving},
+  author={Wei Cao and Marcel Hallgarten and Tianyu Li and Daniel Dauner and Xunjiang Gu and Caojun Wang and Yakov Miron and Marco Aiello and Hongyang Li and Igor Gilitschenski and Boris Ivanovic and Marco Pavone and Andreas Geiger and Kashyap Chitta},
+  booktitle={Conference on Robot Learning (CoRL)},
+  year={2025}
+}
+
+@article{zhou2024hugsim,
+  title={HUGSIM: A Real-Time, Photo-Realistic and Closed-Loop Simulator for Autonomous Driving},
+  author={Zhou, Hongyu and Lin, Longzhong and Wang, Jiabao and Lu, Yichong and Bai, Dongfeng and Liu, Bingbing and Wang, Yue and Geiger, Andreas and Liao, Yiyi},
+  journal={arXiv preprint arXiv:2412.01718},
+  year={2024}
+}
+
+@article{kim2026odyssey,
+  title={Odyssey: A Closed-Loop Benchmark for Long-Horizon Real-World Driving with Explicit Navigation Routes},
+  author={Kim, Jungho and Shin, Hongjae and Yu, Seunghoon and Yoo, Heecheol and Kim, Myeongjun and Oh, Jiyong and Kwak, Donghyuk and Nam, Seunghyeop and Oh, Haesung and Kim, Hyunju and Cho, Hyungchan and Park, Jaehyun and Seo, Soo Won and Choi, Jun Won},
+  journal={arXiv preprint arXiv:2610.06469},
+  year={2026}
 }
 
 @misc{li2026worldengine,

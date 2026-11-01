@@ -1,0 +1,150 @@
+Lets the Bench2Drive leaderboard drive against a CARLA server started beforehand, on Python 3.9+. The evaluator no
+longer launches its own server from CARLA_ROOT on a free port (nor kills it after a crash), connects to the client and
+the traffic manager once and raises when either is unreachable instead of retrying for minutes, and reads weather.xml
+next to the package instead of from the working directory. The route and scenario parsers drop
+Element.getchildren(), which Python 3.9 removed. setup_carla.sh applies it.
+
+diff --git a/leaderboard/leaderboard/leaderboard_evaluator.py b/leaderboard/leaderboard/leaderboard_evaluator.py
+index 2f91b57..e78fced 100644
+--- a/leaderboard/leaderboard/leaderboard_evaluator.py
++++ b/leaderboard/leaderboard/leaderboard_evaluator.py
+@@ -33,10 +33,7 @@ from leaderboard.envs.sensor_interface import SensorConfigurationInvalid
+ from leaderboard.autoagents.agent_wrapper import AgentError, validate_sensor_configuration, TickRuntimeError
+ from leaderboard.utils.statistics_manager import StatisticsManager, FAILURE_MESSAGES
+ from leaderboard.utils.route_indexer import RouteIndexer
+-import atexit
+-import subprocess
+ import time
+-import random
+ from datetime import datetime
+ 
+ sensors_to_icons = {
+@@ -49,21 +46,9 @@ sensors_to_icons = {
+     'sensor.speedometer':       'carla_speedometer'
+ }
+ 
+-import socket
+-
+-def find_free_port(starting_port):
+-    port = starting_port
+-    while True:
+-        try:
+-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+-                s.bind(("localhost", port))
+-                return port
+-        except OSError:
+-            port += 1
+-
+ def get_weather_id(weather_conditions):
+     from xml.etree import ElementTree as ET
+-    tree = ET.parse('leaderboard/data/weather.xml')
++    tree = ET.parse(os.path.join(os.path.dirname(__file__), os.pardir, 'data', 'weather.xml'))
+     root = tree.getroot()
+     def conditions_match(weather, conditions):
+         for (key, value) in weather:
+@@ -198,16 +183,9 @@ class LeaderboardEvaluator(object):
+         """
+         Prepares the simulation by getting the client, and setting up the world and traffic manager settings
+         """
+-        self.carla_path = os.environ["CARLA_ROOT"]
+-        args.port = find_free_port(args.port)
+-        cmd1 = f"{os.path.join(self.carla_path, 'CarlaUE4.sh')} -RenderOffScreen -nosound -carla-rpc-port={args.port} -graphicsadapter={args.gpu_rank}"
+-        self.server = subprocess.Popen(cmd1, shell=True, preexec_fn=os.setsid)
+-        print(cmd1, self.server.returncode, flush=True)
+-        atexit.register(os.killpg, self.server.pid, signal.SIGKILL)
+-        time.sleep(30)
+-            
+         attempts = 0
+-        num_max_restarts = 20
++        num_max_restarts = 1
++        client_setup_success = False
+         while attempts < num_max_restarts:
+             try:
+                 client = carla.Client(args.host, args.port)
+@@ -223,27 +201,33 @@ class LeaderboardEvaluator(object):
+                 )
+                 client.get_world().apply_settings(settings)
+                 print(f"load_world success , attempts={attempts}", flush=True)
++                client_setup_success = True
+                 break
+             except Exception as e:
+                 print(f"load_world failed , attempts={attempts}", flush=True)
+                 print(e, flush=True)
+                 attempts += 1
+                 time.sleep(5)
++        if not client_setup_success:
++            raise RuntimeError("Failed to connect to CARLA server after {} attempts".format(num_max_restarts))
+         attempts = 0
+-        num_max_restarts = 40
++        num_max_restarts = 1
++        traffic_manager_setup_success = False
+         while attempts < num_max_restarts:
+             try:
+-                args.traffic_manager_port = find_free_port(args.traffic_manager_port)
+                 traffic_manager = client.get_trafficmanager(args.traffic_manager_port)
+                 traffic_manager.set_synchronous_mode(True)
+                 traffic_manager.set_hybrid_physics_mode(True)
+                 print(f"traffic_manager init success, try_time={attempts}", flush=True)
++                traffic_manager_setup_success = True
+                 break
+             except Exception as e:
+                 print(f"traffic_manager init fail, try_time={attempts}", flush=True)
+                 print(e, flush=True)
+                 attempts += 1
+                 time.sleep(5)
++        if not traffic_manager_setup_success:
++            raise RuntimeError("Failed to connect to CARLA Traffic Manager after {} attempts".format(num_max_restarts))
+         return client, client_timeout, traffic_manager
+ 
+     def _reset_world_settings(self):
+@@ -496,11 +480,6 @@ class LeaderboardEvaluator(object):
+             print("\033[1m> Registering the global statistics\033[0m", flush=True)
+             self.statistics_manager.compute_global_statistics()
+             self.statistics_manager.validate_and_write_statistics(self.sensors_initialized, crashed)
+-        
+-        if crashed:
+-            cmd2 = "ps -ef | grep '-graphicsadapter="+ str(args.gpu_rank) + "' | grep -v grep | awk '{print $2}' | xargs -r kill -9"
+-            server = subprocess.Popen(cmd2, shell=True, preexec_fn=os.setsid)
+-            atexit.register(os.killpg, server.pid, signal.SIGKILL)
+ 
+         return crashed
+ 
+diff --git a/leaderboard/leaderboard/utils/route_parser.py b/leaderboard/leaderboard/utils/route_parser.py
+index c738d23..693a119 100644
+--- a/leaderboard/leaderboard/utils/route_parser.py
++++ b/leaderboard/leaderboard/utils/route_parser.py
+@@ -129,7 +129,7 @@ class RouteParser(object):
+                 scenario_config.name = scenario.attrib.get('name')
+                 scenario_config.type = scenario.attrib.get('type')
+ 
+-                for elem in scenario.getchildren():
++                for elem in list(scenario):
+                     if elem.tag == 'trigger_point':
+                         scenario_config.trigger_points.append(convert_elem_to_transform(elem))
+                     elif elem.tag == 'other_actor':
+diff --git a/scenario_runner/srunner/tools/route_parser.py b/scenario_runner/srunner/tools/route_parser.py
+index 89f1995..63fd30a 100644
+--- a/scenario_runner/srunner/tools/route_parser.py
++++ b/scenario_runner/srunner/tools/route_parser.py
+@@ -80,7 +80,7 @@ class RouteParser(object):
+                 scenario_config.name = scenario.attrib.get('name')
+                 scenario_config.type = scenario.attrib.get('type')
+ 
+-                for elem in scenario.getchildren():
++                for elem in list(scenario):
+                     if elem.tag == 'trigger_point':
+                         scenario_config.trigger_points.append(convert_elem_to_transform(elem))
+                     elif elem.tag == 'other_actor':
+diff --git a/scenario_runner/srunner/tools/scenario_parser.py b/scenario_runner/srunner/tools/scenario_parser.py
+index 0de98fa..d35e7ed 100644
+--- a/scenario_runner/srunner/tools/scenario_parser.py
++++ b/scenario_runner/srunner/tools/scenario_parser.py
+@@ -68,7 +68,7 @@ class ScenarioConfigurationParser(object):
+                 config.name = scenario_config_name
+                 config.type = scenario_config_type
+ 
+-                for elem in scenario.getchildren():
++                for elem in list(scenario):
+                     # Elements with special parsing
+                     if elem.tag == 'ego_vehicle':
+                         config.ego_vehicles.append(ActorConfigurationData.parse_from_node(elem, 'hero'))

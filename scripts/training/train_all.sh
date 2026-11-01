@@ -44,9 +44,9 @@ _speed_overrides=(
 	# compile_ahead=true
 	# cudnn_attention=true
 	# symmetric_gradient_memory=true
-	# "policy_config.transfuser_config.backbone_config.kernel_patches=['py123d_garage_cuda.transfuser.resnet:fuse_stem','py123d_garage.policy.transfuser.network.encoder.transfuser:share_latent_bev_stem','py123d_garage_cuda.transfuser.resnet:pin_conv_engines','py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs','py123d_garage.policy.transfuser.network.encoder.transfuser:fuse_fusion_qkv','py123d_garage_cuda.transfuser.fusion:patch_fusion_upsample_add']"
-	# "policy_config.transfuser_config.bev_semantic_config.kernel_patches=['py123d_garage_cuda.transfuser.resnet:pin_conv_engines','py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs']"
-	# "policy_config.transfuser_config.box_detection_config.kernel_patches=['py123d_garage_cuda.transfuser.resnet:pin_conv_engines','py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs']"
+	# "policy_config.transfuser_config.backbone_config.kernel_patches=['py123d_garage_cuda.transfuser.resnet:fuse_stem','py123d_garage.policy.transfuser.network.encoder.transfuser:share_latent_bev_stem','py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs','py123d_garage.policy.transfuser.network.encoder.transfuser:fuse_fusion_qkv','py123d_garage_cuda.transfuser.fusion:patch_fusion_upsample_add']"
+	# "policy_config.transfuser_config.bev_semantic_config.kernel_patches=['py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs']"
+	# "policy_config.transfuser_config.box_detection_config.kernel_patches=['py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs']"
 	# Applies to midtrain and posttrain only, since pretrain has no motion planner
 	# "policy_config.transfuser_config.planning_config.kernel_patches=['py123d_garage_cuda.transfuser.planner:patch_planner_attention','py123d_garage_cuda.transfuser.planner:patch_planner_feed_forward','py123d_garage_cuda.transfuser.adaptive_norm:patch_planner_adaptive_norm']"
 )

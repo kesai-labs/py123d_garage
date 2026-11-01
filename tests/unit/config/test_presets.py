@@ -38,7 +38,6 @@ def test_every_preset_constructs(preset_module, config_class) -> None:
 def test_no_preset_declares_no_policy_block() -> None:
     config = load_config(TrainingConfig, "train", args=[])
     assert config.policy_config.transfuser_config is None
-    assert config.policy_config.vavam_config is None
 
 
 def test_preset_sets_policy_and_dataset_together() -> None:

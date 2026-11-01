@@ -11,13 +11,16 @@ from hydra.errors import ConfigCompositionException
 from py123d_garage.common.config_help import load_evaluation_config
 from py123d_garage.config.schema.evaluation.alpasim_config import AlpasimBenchmarkConfig
 from py123d_garage.config.schema.evaluation.carla_config import CarlaBenchmarkConfig
-from py123d_garage.config.schema.policy.vavam_config import VavamVisualizationConfig
+from py123d_garage.config.schema.policy.transfuser_config import TransfuserVisualizationConfig
 
 _SAVED_CONFIG = """
 policy_config:
-  target: py123d_garage.policy.vavam.vavam_policy:VavamPolicy
-  vavam_config:
-    context_length: 4
+  target: py123d_garage.policy.transfuser.transfuser_policy:TransfuserPolicy
+  transfuser_config:
+    trajectory_offsets_us: [500000]
+    required_target_point_distances_m: [20.0]
+    planning_config:
+      transfuser_token_dim: 128
 """
 
 
@@ -39,10 +42,9 @@ def _carla_args(checkpoint_file: str) -> list[str]:
 
 def test_replays_the_saved_policy_config(checkpoint_file: str) -> None:
     config = load_evaluation_config(CarlaBenchmarkConfig, "evaluate_carla", args=_carla_args(checkpoint_file))
-    assert config.policy_config.target == "py123d_garage.policy.vavam.vavam_policy:VavamPolicy"
-    assert config.policy_config.vavam_config is not None
-    assert config.policy_config.vavam_config.context_length == 4
-    assert config.policy_config.transfuser_config is None
+    assert config.policy_config.target == "py123d_garage.policy.transfuser.transfuser_policy:TransfuserPolicy"
+    assert config.policy_config.transfuser_config is not None
+    assert config.policy_config.transfuser_config.planning_config.transfuser_token_dim == 128
     assert config.policy_config.evaluation_checkpoint_files == [checkpoint_file]
 
 
@@ -50,10 +52,13 @@ def test_override_beats_the_saved_config(checkpoint_file: str) -> None:
     config = load_evaluation_config(
         CarlaBenchmarkConfig,
         "evaluate_carla",
-        args=[*_carla_args(checkpoint_file), "+policy_config.vavam_config.context_length=1"],
+        args=[
+            *_carla_args(checkpoint_file),
+            "+policy_config.transfuser_config.planning_config.transfuser_token_dim=64",
+        ],
     )
-    assert config.policy_config.vavam_config is not None
-    assert config.policy_config.vavam_config.context_length == 1
+    assert config.policy_config.transfuser_config is not None
+    assert config.policy_config.transfuser_config.planning_config.transfuser_token_dim == 64
 
 
 def test_works_for_every_benchmark_class(checkpoint_file: str) -> None:
@@ -65,8 +70,8 @@ def test_works_for_every_benchmark_class(checkpoint_file: str) -> None:
             "policy_config.evaluation_sensor_rig_file=rig.yaml",
         ],
     )
-    assert config.policy_config.vavam_config is not None
-    assert config.policy_config.vavam_config.context_length == 4
+    assert config.policy_config.transfuser_config is not None
+    assert config.policy_config.transfuser_config.planning_config.transfuser_token_dim == 128
 
 
 def test_missing_checkpoint_override_raises() -> None:
@@ -87,13 +92,15 @@ def test_replays_an_ensemble_of_one_recipe(checkpoint_file: str, tmp_path: Path)
         ],
     )
     assert config.policy_config.evaluation_checkpoint_files == [checkpoint_file, str(second)]
-    assert config.policy_config.vavam_config is not None
+    assert config.policy_config.transfuser_config is not None
 
 
 def test_mixed_recipes_are_rejected(checkpoint_file: str, tmp_path: Path) -> None:
     other_dir = tmp_path / "other"
     other_dir.mkdir()
-    (other_dir / "config.yaml").write_text(_SAVED_CONFIG.replace("context_length: 4", "context_length: 2"))
+    (other_dir / "config.yaml").write_text(
+        _SAVED_CONFIG.replace("transfuser_token_dim: 128", "transfuser_token_dim: 64"),
+    )
     other = other_dir / "model.pth"
     other.touch()
     with pytest.raises(ValueError, match="different policy_config"):
@@ -131,17 +138,24 @@ def test_drawing_styles_come_from_the_code(tmp_path: Path) -> None:
     checkpoint = tmp_path / "model.pth"
     checkpoint.touch()
     config = load_evaluation_config(CarlaBenchmarkConfig, "evaluate_carla", args=_carla_args(str(checkpoint)))
-    assert config.policy_config.vavam_config is not None
-    assert config.policy_config.vavam_config.context_length == 4
-    assert config.policy_config.vavam_config.visualization_config == VavamVisualizationConfig()
+    assert config.policy_config.transfuser_config is not None
+    assert config.policy_config.transfuser_config.planning_config.transfuser_token_dim == 128
+    assert config.policy_config.transfuser_config.visualization_config == TransfuserVisualizationConfig()
 
 
 def test_replays_an_empty_saved_block(tmp_path: Path) -> None:
     (tmp_path / "config.yaml").write_text(
-        "policy_config:\n  target: py123d_garage.policy.vavam.vavam_policy:VavamPolicy\n  vavam_config: {}\n",
+        "policy_config:\n  target: py123d_garage.policy.transfuser.transfuser_policy:TransfuserPolicy\n  transfuser_config: {}\n",
     )
     checkpoint = tmp_path / "model.pth"
     checkpoint.touch()
-    config = load_evaluation_config(CarlaBenchmarkConfig, "evaluate_carla", args=_carla_args(str(checkpoint)))
-    assert config.policy_config.vavam_config is not None
-    assert config.policy_config.transfuser_config is None
+    config = load_evaluation_config(
+        CarlaBenchmarkConfig,
+        "evaluate_carla",
+        args=[
+            *_carla_args(str(checkpoint)),
+            "+policy_config.transfuser_config.trajectory_offsets_us=[500000]",
+            "+policy_config.transfuser_config.required_target_point_distances_m=[20.0]",
+        ],
+    )
+    assert config.policy_config.transfuser_config is not None

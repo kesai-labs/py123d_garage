@@ -31,6 +31,8 @@ class NavsimBenchmarkConfig(AbstractBenchmarkConfig):
 
     # Writes the policy's rendered view of every scored scene into <run dir>/visualizations.
     save_visualizations: bool = False
+    # Writes the planned trajectory of every scene into <run dir>/trajectories, e.g. to score it with the official devkit.
+    save_trajectories: bool = False
 
     # -- The navtest protocol, hard-coded --
 

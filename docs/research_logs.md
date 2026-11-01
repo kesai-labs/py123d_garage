@@ -93,7 +93,7 @@ Most entries are one or two trainings in our setup (data mix, schedule, local Al
 | :------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------- | :------ |
 | Reweight hard frames (sharp turns, stops, close leads) against easy frames | Every weight from 0.3 to 1 is within noise on both tracks                                                                                    | Dropped |
 | Train mostly on frames where a constant speed is wrong                     | NuRec level with or below two uncurated runs, and falling as the easy-frame weight drops from 0.25 to 0.025. More overspeed at lower weights | Dropped |
-| Upweight the NAVSIM navtrain scenes in nuPlan training                     | A tie at weight 2, slightly worse at weight 4                                                                                                | Dropped |
+| Train only on the NAVSIM navtrain scenes                                   | Significantly worse                                                                                                                          | Dropped |
 | Remove nuPlan from the training mix                                        | A tie                                                                                                                                        | Neutral |
 | Offline distillation from Alpamayo trajectories                            | Not run. The estimated gain was inside the noise                                                                                             | Dropped |
 

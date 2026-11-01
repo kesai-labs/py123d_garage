@@ -49,9 +49,18 @@ _build/
 
 # CARLA
 lib/carla/simulator/
+lib/carla/benchmark/
 
 # AlpaSim
 lib/alpasim/alpasim
+
+# Odyssey
+lib/odyssey/odyssey
+lib/odyssey/runtime
+
+# HUGSIM
+lib/hugsim/hugsim
+lib/hugsim/runtime
 
 # runs and data links
 outputs

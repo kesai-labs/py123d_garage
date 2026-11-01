@@ -116,13 +116,14 @@ def _after_fork_in_child() -> None:
 os.register_at_fork(before=_before_fork, after_in_parent=_after_fork_in_parent, after_in_child=_after_fork_in_child)
 
 
-def example_batch(dataset: TrainingDataset, batch_size: int) -> TrainingSample:
+def example_batch(dataset: TrainingDataset, batch_size: int, start: int = 0) -> TrainingSample:
     """
-    Load one batch of a dataset's first samples as the DataLoader would, leaving the global RNG streams untouched.
+    Load one batch of a dataset's consecutive samples as the DataLoader would, leaving the global RNG streams untouched.
 
     Args:
         dataset: the dataset to read
         batch_size: the loaded batch size
+        start: the index of the batch's first sample; the indices wrap around the dataset
 
     Returns:
         the collated batch, on the CPU
@@ -130,7 +131,7 @@ def example_batch(dataset: TrainingDataset, batch_size: int) -> TrainingSample:
     python_state = random.getstate()
     numpy_state = np.random.get_state()  # noqa: NPY002
     with torch.random.fork_rng(devices=[]):  # pyright: ignore[reportUnknownMemberType]
-        batch = TrainingSample.collate([dataset[index % len(dataset)] for index in range(batch_size)])
+        batch = TrainingSample.collate([dataset[(start + index) % len(dataset)] for index in range(batch_size)])
     random.setstate(python_state)
     np.random.set_state(numpy_state)  # noqa: NPY002
     return batch

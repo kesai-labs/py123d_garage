@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+# Odyssey's loader requires a NAVSIM agent yaml at <model.repo>/navsim/planning/script/config/common/agent/<model.agent_config>.yaml.
+# GaragePlanner never reads it: it builds the policy from model.checkpoint and the config.yaml next to it.

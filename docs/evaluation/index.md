@@ -10,12 +10,14 @@ Our target is the [AlpaSim](alpasim.md) simulator and, after it, real-world depl
 
 <div align="center">
 
-|         Benchmark         |  Feedback   |                     Data source                      |
-| :-----------------------: | :---------: | :--------------------------------------------------: |
-|   [AlpaSim](alpasim.md)   | closed loop | AlpaSim on NuRec (Physical-AI-AV) and MTGS (nuPlan)  |
-|    [NAVSIM](navsim.md)    |  open loop  | nuPlan, or any 123D dataset with boxes and an HD map |
-| [Open loop](open_loop.md) |  open loop  |                   any 123D dataset                   |
-|     [CARLA](carla.md)     | closed loop |                   CARLA simulator                    |
+|         Benchmark         |  Feedback   |                                 Data source                                 |
+| :-----------------------: | :---------: | :-------------------------------------------------------------------------: |
+|   [AlpaSim](alpasim.md)   | closed loop |             AlpaSim on NuRec (Physical-AI-AV) and MTGS (nuPlan)             |
+|   [Odyssey](odyssey.md)   | closed loop |                 Odyssey on reconstructed nuPlan logs (3DGS)                 |
+|    [HUGSIM](hugsim.md)    | closed loop | HUGSIM on reconstructed nuScenes, PandaSet, KITTI-360 and Waymo logs (3DGS) |
+|    [NAVSIM](navsim.md)    |  open loop  |            nuPlan, or any 123D dataset with boxes and an HD map             |
+| [Open loop](open_loop.md) |  open loop  |                              any 123D dataset                               |
+|     [CARLA](carla.md)     | closed loop |                               CARLA simulator                               |
 
 </div>
 

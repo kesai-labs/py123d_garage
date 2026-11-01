@@ -44,7 +44,6 @@ _speed_overrides=(
 	# compile_ahead=true
 	# cudnn_attention=true
 	# symmetric_gradient_memory=true
-	# No pin_conv_engines: its tuned engines are for 32 samples per GPU, this recipe trains 8
 	# "policy_config.transfuser_config.backbone_config.kernel_patches=['py123d_garage_cuda.transfuser.resnet:fuse_stem','py123d_garage.policy.transfuser.network.encoder.transfuser:share_latent_bev_stem','py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs','py123d_garage.policy.transfuser.network.encoder.transfuser:fuse_fusion_qkv','py123d_garage_cuda.transfuser.fusion:patch_fusion_upsample_add']"
 	# "policy_config.transfuser_config.bev_semantic_config.kernel_patches=['py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs']"
 	# "policy_config.transfuser_config.box_detection_config.kernel_patches=['py123d_garage_cuda.transfuser.linear_convs:patch_pointwise_convs']"

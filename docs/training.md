@@ -47,11 +47,13 @@ Each seed still trains as it would alone. The loader loads three times the batch
 
 To train one seed only, pass `num_seeds=1` and a third of the epochs, `lightning_trainer_config.max_epochs=31` for the pretrain and `15` for the two later stages. The batch, the schedule and the checkpoint interval follow the seed count by themselves, and the next stage takes the single weights file in `initial_weights_files`.
 
+As a side note, we occasionally observe one seed diverging during training, which then scores noticeably below the other two in closed loop.
+
 ## Modify, compile and use custom CUDA kernels
 
 <img src="assets/training_kernels.svg" alt="Which PyTorch modules the CUDA kernels replace during training" width="100%">
 
-Optional CUDA kernels replace parts of the encoders, the heads and the motion planner. They mirror the PyTorch code and are used in training only, so evaluation and checkpoints never depend on them. They need an Ampere or newer GPU, the fastest ones Hopper. Before the first step, a check runs one batch with and without them: a requested kernel that falls back to PyTorch on any call, because of the GPU, the batch's shapes or another kernel replacing it, stops the run and names the reason; `kernel_check_require_patches=false` trains on PyTorch instead. On H100, with every kernel, they shorten the training step by about 17 % in pretraining and by about 30 to 35 % in midtraining and posttraining:
+Optional CUDA kernels replace parts of the encoders, the heads and the motion planner. They mirror the PyTorch code and are used in training only, so evaluation and checkpoints never depend on them. They need an Ampere or newer GPU, the fastest ones Hopper. Each kernel is a fast path: where the GPU, the shapes or another kernel rule it out, that call runs PyTorch and the kernel report says why; `kernel_check_require_patches=true` stops the run instead. Before the first step of every stage, a check compares several batches with and without the kernels and stops the run only when they change the loss or a module's gradients beyond bf16 rounding. On H100, with every kernel, they shorten the training step by about 17 % in pretraining and by about 30 to 35 % in midtraining and posttraining:
 
 | Stage     | Step time saved with CUDA kernels | MFU with PyTorch | MFU with CUDA kernels |
 | :-------- | --------------------------------: | ---------------: | --------------------: |

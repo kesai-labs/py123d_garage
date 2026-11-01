@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 KE:SAI
+
+# Odyssey agent config of a TransFuser that reads the front camera now and 1 s ago and plans 6.4 s ahead at 10 Hz.
+model:
+  name: garage_transfuser
+  python: ${PY123D_GARAGE_PYTHON}
+  repo: .
+  agent_config: py123d_garage
+  checkpoint: ${CHECKPOINT_FILE}
+  # Hydra overrides of py123d_garage's evaluate_odyssey config.
+  overrides: []
+  adapter: py123d_garage.evaluation.odyssey.planner:GaragePlanner
+history_times_s: [-1.0, 0.0]
+camera_times_s: {CAM_F0: [-1.0, 0.0]}
+navigation: {driving_command: false, sd_route: features}
+# One pose per tick from the next one on, out to the 6.4 s plan less the 0.5 s it is held.
+output: {plan_dt: 0.1, shape: [60, 3]}

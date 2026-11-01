@@ -2,8 +2,8 @@
 # Copyright (c) 2026 KE:SAI
 
 """
-Checks before training that a policy's kernel patches give the loss and parameter gradients of the plain torch policy,
-and writes the run's kernel report.
+Checks before training that a policy's kernel patches give the loss and parameter gradients of the plain torch policy
+within bf16 rounding over several batches, and writes the run's kernel report.
 """
 
 from __future__ import annotations
@@ -14,8 +14,11 @@ import importlib
 import importlib.metadata
 import json
 import logging
+import math
 import operator
-from collections.abc import Callable, Iterator, Mapping
+import statistics
+from collections import defaultdict
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -294,93 +297,149 @@ def build_policy(
     return policy
 
 
-@dataclass
-class Comparison:
-    """How a patched bf16 step stands against the plain bf16 step, both measured from the plain fp32 step."""
-
-    loss_error: float
-    worst_parameter: str | None
-    worst_margin: float
-    worst_patched_error: float
-    worst_plain_error: float
-    failures: list[str]
+# A module is a parameter name's first parts, such as backbone.image_encoder or center_net_decoder.wh_head. A module's
+# gradient holds enough elements that bf16 rounding averages out; a single small tensor's can lie 20 times as far from
+# fp32 as the plain step's on one batch for rounding alone.
+_MODULE_DEPTH: Final[int] = 2
 
 
-def _norm(tensor: Tensor) -> float:
+def module_of(parameter: str) -> str:
     """
-    Computes a tensor's Euclidean norm.
+    Names the module a parameter belongs to for the check.
 
     Args:
-        tensor: the tensor
+        parameter: the parameter's name in the policy.
 
     Returns:
-        the norm
+        the first _MODULE_DEPTH parts of the name.
     """
-    return float(tensor.square().sum().sqrt().item())
+    return ".".join(parameter.split(".")[:_MODULE_DEPTH])
 
 
-# A gradient smaller than the plain bf16 step's own error from fp32 is rounding noise in both bf16 steps, such as the
-# gradient of a key norm's bias, which softmax cancels; the ratio of two noise norms says nothing about the kernels,
-# so there only a gap of this many times the plain error fails.
-_UNRESOLVED_GRAD_FACTOR: Final[float] = 10.0
+@dataclass
+class BatchErrors:
+    """One batch of the check: the patched and plain losses and each module's gradient distance from the fp32 step."""
+
+    patched_loss: float
+    plain_loss: float
+    patched: dict[str, float]
+    plain: dict[str, float]
+    problems: list[str]
 
 
-def compare(
-    patched: StepOutcome,
-    plain: StepOutcome,
-    reference: StepOutcome,
-    loss_rtol: float,
-    grad_factor: float,
-    grad_floor: float,
-) -> Comparison:
+def batch_errors(patched: StepOutcome, plain: StepOutcome, reference: StepOutcome) -> BatchErrors:
     """
-    Compares a patched step with the plain one: the patched loss within loss_rtol of the plain loss, and every patched
-    gradient at most grad_factor times as far from the fp32 reference gradient as the plain gradient is, plus grad_floor
-    times the norm of that parameter's reference gradient. A parameter whose reference gradient is smaller than the plain
-    gradient's error is unresolved in bf16 and gets _UNRESOLVED_GRAD_FACTOR instead of grad_factor.
+    Reduces one batch's three steps to each module's distance from the fp32 step: the norm over every gradient of the
+    module's parameters.
 
     Args:
         patched: the patched policy's step
         plain: the plain policy's step under the same precision
         reference: the plain policy's step in fp32
+
+    Returns:
+        the batch's errors; problems names a non-finite patched loss or gradient and a gradient missing from a step
+    """
+    problems: list[str] = []
+    if not math.isfinite(patched.loss):
+        problems.append(f"loss {patched.loss} with the patches")
+    outcomes = {"the patches": patched, "no patches": plain, "fp32": reference}
+    patched_squares: defaultdict[str, float] = defaultdict(float)
+    plain_squares: defaultdict[str, float] = defaultdict(float)
+    for name in sorted(set(patched.gradients) | set(plain.gradients) | set(reference.gradients)):
+        present = [label for label, outcome in outcomes.items() if name in outcome.gradients]
+        if len(present) < len(outcomes):
+            problems.append(f"{name}: a gradient only with {' and '.join(present)}")
+            continue
+        if not bool(torch.isfinite(patched.gradients[name]).all().item()):
+            problems.append(f"{name}: a non-finite gradient with the patches")
+            continue
+        module = module_of(name)
+        patched_squares[module] += float((patched.gradients[name] - reference.gradients[name]).square().sum().item())
+        plain_squares[module] += float((plain.gradients[name] - reference.gradients[name]).square().sum().item())
+    return BatchErrors(
+        patched.loss,
+        plain.loss,
+        {module: math.sqrt(value) for module, value in patched_squares.items()},
+        {module: math.sqrt(value) for module, value in plain_squares.items()},
+        problems,
+    )
+
+
+@dataclass
+class Comparison:
+    """How the patched steps stand against the plain bf16 steps over the check's batches, both measured from fp32."""
+
+    loss_error: float
+    module_ratios: dict[str, float]
+    worst_module: str | None
+    worst_ratio: float
+    failures: list[str]
+    warnings: list[str]
+
+
+def _error_ratio(patched_error: float, plain_error: float) -> float:
+    """
+    Divides a module's patched error by its plain error; two zero errors are the same step.
+
+    Args:
+        patched_error: the patched gradient's distance from fp32
+        plain_error: the plain gradient's distance from fp32
+
+    Returns:
+        the ratio, infinite for a patched error where the plain step has none
+    """
+    if plain_error > 0.0:
+        return patched_error / plain_error
+    return 1.0 if patched_error == 0.0 else math.inf
+
+
+def compare(batches: list[BatchErrors], loss_rtol: float, warn_factor: float, refuse_factor: float) -> Comparison:
+    """
+    Compares the patched steps with the plain ones over the check's batches. Fails on a patched loss further than
+    loss_rtol from the plain loss on any batch, on any batch's problem, and on a module whose patched gradient lies more
+    than refuse_factor times as far from the fp32 gradient as the plain one, by the median over the batches; warns above
+    warn_factor.
+
+    Args:
+        batches: every batch's errors
         loss_rtol: the loss tolerance, relative to the plain loss
-        grad_factor: how many times further from the reference a patched gradient may lie than the plain one
-        grad_floor: the error allowed on top, as a fraction of the parameter's reference gradient norm
+        warn_factor: the median ratio of patched to plain error above which a module warns
+        refuse_factor: the median ratio above which a module fails
 
     Returns:
         the comparison; failures is empty where the steps agree
     """
     failures: list[str] = []
-    loss_error = abs(patched.loss - plain.loss) / max(abs(plain.loss), 1e-30)
-    if loss_error > loss_rtol:
-        failures.append(
-            f"loss {patched.loss:.6g} with the patches, {plain.loss:.6g} without: relative error {loss_error:.3g} "
-            f"over kernel_check_loss_rtol {loss_rtol:.3g}",
-        )
-    worst_parameter: str | None = None
-    worst_margin = worst_patched_error = worst_plain_error = 0.0
-    outcomes = {"the patches": patched, "no patches": plain, "fp32": reference}
-    for name in sorted(set(patched.gradients) | set(plain.gradients) | set(reference.gradients)):
-        present = [label for label, outcome in outcomes.items() if name in outcome.gradients]
-        if len(present) < len(outcomes):
-            failures.append(f"{name}: a gradient only with {' and '.join(present)}")
-            continue
-        patched_error = _norm(patched.gradients[name] - reference.gradients[name])
-        plain_error = _norm(plain.gradients[name] - reference.gradients[name])
-        reference_norm = _norm(reference.gradients[name])
-        factor = grad_factor if reference_norm >= plain_error else max(grad_factor, _UNRESOLVED_GRAD_FACTOR)
-        margin = patched_error / max(factor * plain_error + grad_floor * reference_norm, 1e-30)
-        if margin > worst_margin:
-            worst_parameter, worst_margin = name, margin
-            worst_patched_error, worst_plain_error = patched_error, plain_error
-        if margin > 1.0:
+    warnings: list[str] = []
+    loss_error = 0.0
+    for index, batch in enumerate(batches):
+        error = abs(batch.patched_loss - batch.plain_loss) / max(abs(batch.plain_loss), 1e-30)
+        loss_error = max(loss_error, error)
+        if error > loss_rtol:
             failures.append(
-                f"{name}: {patched_error:.3g} from the fp32 gradient with the patches, {plain_error:.3g} without; "
-                f"allowed {'kernel_check_grad_factor' if factor == grad_factor else 'an unresolved gradient'} "
-                f"{factor:.3g} x {plain_error:.3g} + kernel_check_grad_floor "
-                f"{grad_floor:.3g} x {reference_norm:.3g}",
+                f"batch {index}: loss {batch.patched_loss:.6g} with the patches, {batch.plain_loss:.6g} without: "
+                f"relative error {error:.3g} over kernel_check_loss_rtol {loss_rtol:.3g}",
             )
-    return Comparison(loss_error, worst_parameter, worst_margin, worst_patched_error, worst_plain_error, failures)
+        failures.extend(f"batch {index}: {problem}" for problem in batch.problems)
+    modules = sorted({module for batch in batches for module in batch.patched})
+    module_ratios = {
+        module: statistics.median(
+            _error_ratio(batch.patched[module], batch.plain[module]) for batch in batches if module in batch.patched
+        )
+        for module in modules
+    }
+    worst_module, worst_ratio = max(module_ratios.items(), key=lambda item: item[1], default=(None, 0.0))
+    for module, ratio in sorted(module_ratios.items(), key=lambda item: -item[1]):
+        message = (
+            f"{module}: the patched gradient lies {ratio:.3g} times as far from fp32 as the plain one, median of "
+            f"{len(batches)} batches"
+        )
+        if ratio > refuse_factor:
+            failures.append(f"{message}, over kernel_check_refuse_factor {refuse_factor:.3g}")
+        elif ratio > warn_factor:
+            warnings.append(f"{message}, over kernel_check_warn_factor {warn_factor:.3g}")
+    return Comparison(loss_error, module_ratios, worst_module, worst_ratio, failures, warnings)
 
 
 def _registry() -> Any | None:
@@ -519,10 +578,50 @@ def _environment_report(device: torch.device) -> dict[str, Any]:
     }
 
 
+def _measure(
+    policy: AnyPolicy,
+    plain_policy: AnyPolicy,
+    inputs: Sequence[SeedInputs],
+    loss_weights: Mapping[str, float],
+    channels_last: bool,
+    train_step_context: Callable[[], AbstractContextManager[None]],
+    device: torch.device,
+    restore: bool,
+) -> tuple[list[BatchErrors], set[str]]:
+    """
+    Runs the check's three steps on every batch: the patched policy and the plain one in the step's precision, and the
+    plain one in fp32.
+
+    Args:
+        policy: the patched policy
+        plain_policy: the plain torch policy with the same weights
+        inputs: every batch's features, labels and navigation on device
+        loss_weights: the weight of every loss by name
+        channels_last: convert the features and labels to channels-last first
+        train_step_context: the trainer's context around a training step, e.g. its autocast
+        device: the device the policies run on
+        restore: leave the patched policy as found, for a policy that trains afterwards
+
+    Returns:
+        every batch's errors and the kernel ops the patched steps dispatched
+    """
+    errors: list[BatchErrors] = []
+    kernel_ops: set[str] = set()
+    for batch_inputs in inputs:
+        step = run_step_without_trace if restore else run_step
+        patched = step(policy, batch_inputs, loss_weights, channels_last, train_step_context, device)
+        plain = run_step(plain_policy, batch_inputs, loss_weights, channels_last, train_step_context, device)
+        with exact_fp32():
+            reference = run_step(plain_policy, batch_inputs, loss_weights, channels_last, nullcontext, device)
+        errors.append(batch_errors(patched, plain, reference))
+        kernel_ops |= patched.kernel_ops
+    return errors, kernel_ops
+
+
 def verify_kernel_patches(
     policy: AnyPolicy,
     training_config: TrainingConfig,
-    inputs: SeedInputs,
+    inputs: Sequence[SeedInputs],
     loss_weights: Mapping[str, float],
     train_step_context: Callable[[], AbstractContextManager[None]],
     device: torch.device,
@@ -530,17 +629,17 @@ def verify_kernel_patches(
 ) -> dict[str, Any]:
     """
     Checks a patched policy against the plain torch policy built from the same config and weights: one forward and
-    backward each on the same inputs, the same seed and no dropout, plus one of the plain policy in fp32 as the
-    reference. The loss and every parameter gradient must lie within the training config's kernel_check tolerances.
-    On a mismatch, finds the patches at fault by rebuilding with one patch at a time, and refuses to train unless
-    kernel_check_refuse is off. A requested patch whose kernels fall back to torch on any call refuses too, unless
-    kernel_check_require_patches is off: the device, the build or its libraries rule them out, the batch falls outside
-    what they handle, or another patch replaces them. Writes the kernel report.
+    backward each on every batch, the same seed and no dropout, plus one of the plain policy in fp32 as the reference.
+    The loss of every batch, and every module's gradient by the median over the batches, must lie within the training
+    config's kernel_check tolerances; see compare. On a failure, finds the patches at fault by rebuilding with one patch
+    at a time, and refuses to train unless kernel_check_refuse is off. A requested patch whose kernels fall back to
+    torch on some call refuses too, with kernel_check_require_patches on; otherwise such a patch is a fast path, and the
+    report says where it ran. Writes the kernel report.
 
     Args:
         policy: policy 0 with its kernel patches applied, on device
         training_config: the training config, for the policy config and the tolerances
-        inputs: seed 0's features, labels and navigation on device
+        inputs: seed 0's features, labels and navigation of every batch, on device
         loss_weights: the weight of every loss by name
         train_step_context: the trainer's context around a training step, e.g. its autocast
         device: the device the policy runs on
@@ -550,15 +649,44 @@ def verify_kernel_patches(
         the kernel report
 
     Raises:
-        RuntimeError: on a mismatch with kernel_check_refuse on, or on a patch whose kernels do not run with
+        RuntimeError: on a failure with kernel_check_refuse on, or on a patch whose kernels do not run with
             kernel_check_require_patches on
+    """
+    report = _check(policy, training_config, inputs, loss_weights, train_step_context, device)
+    if report_file is not None:
+        report_file.write_text(json.dumps(report, indent=2) + "\n")
+    _act_on(report, training_config, report_file)
+    return report
+
+
+def _check(
+    policy: AnyPolicy,
+    training_config: TrainingConfig,
+    inputs: Sequence[SeedInputs],
+    loss_weights: Mapping[str, float],
+    train_step_context: Callable[[], AbstractContextManager[None]],
+    device: torch.device,
+) -> dict[str, Any]:
+    """
+    Runs the check of verify_kernel_patches on the given batches.
+
+    Args:
+        policy: policy 0 with its kernel patches applied, on device
+        training_config: the training config, for the policy config and the tolerances
+        inputs: every batch's features, labels and navigation on device
+        loss_weights: the weight of every loss by name
+        train_step_context: the trainer's context around a training step, e.g. its autocast
+        device: the device the policy runs on
+
+    Returns:
+        the kernel report
     """
     policy_config = training_config.policy_config
     channels_last = training_config.channels_last
     tolerances = (
         training_config.kernel_check_loss_rtol,
-        training_config.kernel_check_grad_factor,
-        training_config.kernel_check_grad_floor,
+        training_config.kernel_check_warn_factor,
+        training_config.kernel_check_refuse_factor,
     )
     patches = kernel_patches_of(policy_config)
     registry = _registry()
@@ -567,78 +695,90 @@ def verify_kernel_patches(
         "AbstractContextManager[dict[str, dict[str, int]]]",
         registry.recording_fallbacks() if registry is not None else nullcontext(without_registry),
     )
-    with recording as fallbacks:
-        patched = run_step_without_trace(policy, inputs, loss_weights, channels_last, train_step_context, device)
     state_dict = {name: tensor.detach() for name, tensor in policy.state_dict().items()}
-    unpatched = build_policy(with_kernel_patches(policy_config, lambda _: False), state_dict, device, channels_last)
-    plain = run_step(unpatched, inputs, loss_weights, channels_last, train_step_context, device)
-    with exact_fp32():
-        reference = run_step(unpatched, inputs, loss_weights, channels_last, nullcontext, device)
-    del unpatched
-    comparison = compare(patched, plain, reference, *tolerances)
+    plain_policy = build_policy(with_kernel_patches(policy_config, lambda _: False), state_dict, device, channels_last)
+    measure = functools.partial(
+        _measure,
+        plain_policy=plain_policy,
+        inputs=inputs,
+        loss_weights=loss_weights,
+        channels_last=channels_last,
+        train_step_context=train_step_context,
+        device=device,
+    )
+    with recording as fallbacks:
+        errors, kernel_ops = measure(policy, restore=True)
+    comparison = compare(errors, *tolerances)
     attribution: list[dict[str, Any]] = []
     if comparison.failures:
         for patch in patches:
             only_this = with_kernel_patches(policy_config, functools.partial(operator.eq, patch))
             single = build_policy(only_this, state_dict, device, channels_last)
-            outcome = run_step(single, inputs, loss_weights, channels_last, train_step_context, device)
+            failures = compare(measure(single, restore=False)[0], *tolerances).failures
+            attribution.append({"patch": patch, "failures": failures})
             del single
-            attribution.append({"patch": patch, "failures": compare(outcome, plain, reference, *tolerances).failures})
+    del plain_policy
     torch.cuda.empty_cache()
     report: dict[str, Any] = {
         "status": "verified" if not comparison.failures else "mismatch",
         **_environment_report(device),
-        "patches": [
-            _patch_report(patch, patches, registry, device, patched.kernel_ops, fallbacks) for patch in patches
-        ],
-        "kernel_ops_run": sorted(patched.kernel_ops),
-        "loss": {
-            "patched": patched.loss,
-            "plain": plain.loss,
-            "fp32": reference.loss,
-            "relative_error": comparison.loss_error,
-            "rtol": training_config.kernel_check_loss_rtol,
-        },
+        "patches": [_patch_report(patch, patches, registry, device, kernel_ops, fallbacks) for patch in patches],
+        "kernel_ops_run": sorted(kernel_ops),
+        "batches": len(inputs),
+        "loss": {"max_relative_error": comparison.loss_error, "rtol": training_config.kernel_check_loss_rtol},
         "gradients": {
-            "parameters": len(reference.gradients),
-            "worst_parameter": comparison.worst_parameter,
-            "worst_margin": comparison.worst_margin,
-            "worst_patched_error": comparison.worst_patched_error,
-            "worst_plain_error": comparison.worst_plain_error,
-            "factor": training_config.kernel_check_grad_factor,
-            "floor": training_config.kernel_check_grad_floor,
+            "worst_module": comparison.worst_module,
+            "worst_ratio": comparison.worst_ratio,
+            "warn_factor": training_config.kernel_check_warn_factor,
+            "refuse_factor": training_config.kernel_check_refuse_factor,
+            "module_ratios": comparison.module_ratios,
         },
         "failures": comparison.failures,
+        "warnings": comparison.warnings,
         "attribution": attribution,
     }
     report["not_running"] = patches_not_running(report["patches"])
-    if report_file is not None:
-        report_file.write_text(json.dumps(report, indent=2) + "\n")
+    return report
+
+
+def _act_on(report: dict[str, Any], training_config: TrainingConfig, report_file: Path | None) -> None:
+    """
+    Logs a kernel report and refuses to train where the training config asks to.
+
+    Args:
+        report: the kernel report
+        training_config: the training config, for kernel_check_refuse and kernel_check_require_patches
+        report_file: where the report went, for the messages; None for none
+
+    Raises:
+        RuntimeError: on a failure with kernel_check_refuse on, or on a patch whose kernels do not run with
+            kernel_check_require_patches on
+    """
+    see = f"; see {report_file}" if report_file is not None else ""
     summary = ", ".join(f"{entry['patch'].split(':')[-1]}: {entry['status']}" for entry in report["patches"])
+    gradients = report["gradients"]
     LOG.info(
-        f"Kernel check: loss relative error {comparison.loss_error:.3g}; the gradient of {comparison.worst_parameter} "
-        f"lies {comparison.worst_patched_error:.3g} from fp32 with the patches and {comparison.worst_plain_error:.3g} "
-        f"without, {comparison.worst_margin:.2f} of its allowance; {summary}",
+        f"Kernel check over {report['batches']} batches: loss relative error up to "
+        f"{report['loss']['max_relative_error']:.3g}; the worst module, {gradients['worst_module']}, lies "
+        f"{gradients['worst_ratio']:.3g} times as far from fp32 as without the patches; {summary}",
     )
+    for warning in report["warnings"]:
+        LOG.warning(f"Kernel check: {warning}")
     if report["not_running"]:
-        message = (
-            "Requested kernel patches fall back to torch: "
-            + "; ".join(report["not_running"])
-            + ". Drop them from kernel_patches, fix their kernels, or set kernel_check_require_patches=false to "
-            "train on the torch path" + (f"; see {report_file}" if report_file is not None else "")
-        )
+        message = "Requested kernel patches fall back to torch on some calls: " + "; ".join(report["not_running"])
         if training_config.kernel_check_require_patches:
-            raise RuntimeError(message)
-        LOG.warning(f"{message}; kernel_check_require_patches is off, training on the torch path")
-    if not comparison.failures:
-        return report
-    at_fault = [entry["patch"] for entry in attribution if entry["failures"]]
+            raise RuntimeError(
+                f"{message}. Drop them from kernel_patches, fix their kernels, or set "
+                f"kernel_check_require_patches=false to run them as fast paths{see}",
+            )
+        LOG.info(f"{message}; those calls run the torch path")
+    if not report["failures"]:
+        return
+    at_fault = [entry["patch"] for entry in report["attribution"] if entry["failures"]]
     message = (
-        f"The kernel patches change the training step: {len(comparison.failures)} mismatches, the first "
-        f"{comparison.failures[0]}; patches at fault on their own: {at_fault or 'none, only together'}"
-        + (f"; see {report_file}" if report_file is not None else "")
+        f"The kernel patches change the training step: {len(report['failures'])} failures, the first "
+        f"{report['failures'][0]}; patches at fault on their own: {at_fault or 'none, only together'}{see}"
     )
     if training_config.kernel_check_refuse:
         raise RuntimeError(message)
     LOG.warning(f"{message}; kernel_check_refuse is off, training anyway")
-    return report

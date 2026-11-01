@@ -18,8 +18,6 @@ try:
     from py123d_garage_cuda._build import ARCHITECTURES as _BUILT_ARCHITECTURES
 except ImportError:  # a source tree setup.py has not built yet
     _BUILT_ARCHITECTURES: tuple[str, ...] = ()
-# Read once at import, like the architectures: torch.compile cannot trace the call in a patched module's forward.
-_CUDNN_VERSION = torch.backends.cudnn.version()
 
 
 @dataclass(frozen=True)
@@ -32,8 +30,6 @@ class OpSupport:
     shared_memory_bytes: int
     dtypes: frozenset[torch.dtype]
     channels_last: bool
-    # The cuDNN version the family was tuned for; None runs on any.
-    cudnn_version: int | None = None
 
 
 OPS: dict[str, OpSupport] = {
@@ -77,31 +73,6 @@ OPS: dict[str, OpSupport] = {
         dtypes=frozenset({torch.bfloat16}),
         channels_last=True,
     ),
-    "pinned_conv": OpSupport(
-        ops=("pinned_conv", "pinned_conv_data_grad", "pinned_conv_weight_grad"),
-        capability=(9, 0),
-        sm90a_only=True,
-        shared_memory_bytes=231472,
-        dtypes=frozenset({torch.bfloat16}),
-        channels_last=True,
-        cudnn_version=91002,
-    ),
-    "regnet_grouped_conv": OpSupport(
-        ops=("regnet_grouped_conv", "regnet_grouped_conv_backward"),
-        capability=(9, 0),
-        sm90a_only=False,
-        shared_memory_bytes=117656,
-        dtypes=frozenset({torch.bfloat16}),
-        channels_last=True,
-    ),
-    "regnet_bn_relu_grouped_conv": OpSupport(
-        ops=("regnet_bn_relu_grouped_conv", "regnet_bn_relu_grouped_conv_backward"),
-        capability=(9, 0),
-        sm90a_only=False,
-        shared_memory_bytes=109584,
-        dtypes=frozenset({torch.bfloat16}),
-        channels_last=True,
-    ),
     "planner_attention": OpSupport(
         ops=(
             "planner_attention",
@@ -142,10 +113,7 @@ PATCHES: dict[str, tuple[str, ...]] = {
     "py123d_garage_cuda.transfuser.planner:patch_planner_attention": ("planner_attention",),
     "py123d_garage_cuda.transfuser.planner:patch_planner_swiglu": ("planner_swiglu_linear",),
     "py123d_garage_cuda.transfuser.planner:patch_planner_feed_forward": ("planner_swiglu_feed_forward",),
-    "py123d_garage_cuda.transfuser.regnet:patch_grouped_convs": ("regnet_grouped_conv",),
-    "py123d_garage_cuda.transfuser.regnet:patch_regnet_blocks": ("regnet_bn_relu_grouped_conv",),
     "py123d_garage_cuda.transfuser.resnet:fuse_stem": ("resnet_stem_conv", "resnet_stem_pool"),
-    "py123d_garage_cuda.transfuser.resnet:pin_conv_engines": ("pinned_conv",),
 }
 
 # Patches whose kernels take over the modules of another patch when both apply, so the other's kernels never run.
@@ -241,8 +209,6 @@ def unsupported_reason(
             f"{op} needs compute capability {entry.capability[0]}.{entry.capability[1]}; "
             f"{properties.name} has {properties.major}.{properties.minor}"
         )
-    if entry.cudnn_version is not None and entry.cudnn_version != _CUDNN_VERSION:
-        return f"{op} is tuned for cuDNN {entry.cudnn_version}; torch loads cuDNN {_CUDNN_VERSION}"
     needed = max(entry.shared_memory_bytes, shared_memory_bytes)
     if needed > properties.shared_memory_per_block_optin:
         return (

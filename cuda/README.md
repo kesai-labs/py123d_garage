@@ -42,8 +42,8 @@ then runs the torch path. A file whose every kernel needs sm_90 belongs in `sm90
 plain path and an sm_90 fast path at run time, like `sm80/depthwise_conv.cu`, belongs in the directory of its minimum.
 
 Compute capabilities, not product names: Hopper is sm_90 and sm_90a, a B200 is sm_100a and an RTX 5090 is sm_120.
-Kernels built on sm_90a run on sm_90 only; everything else runs on its capability and newer. Per-GPU tuning, like the
-cuDNN engine table of `pin_conv_engines`, is data keyed by device name and library version, never a directory.
+Kernels built on sm_90a run on sm_90 only; everything else runs on its capability and newer. Per-GPU tuning is data
+keyed by device name and library version, never a directory.
 
 ## Adding a kernel
 

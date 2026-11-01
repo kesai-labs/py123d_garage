@@ -56,6 +56,7 @@ def main(cfg: DictConfig) -> None:
     policy.verify_contract(benchmark_config=benchmark_config)
 
     benchmark_dir = _CARLA_LIB_DIR / "benchmark" / benchmark_config.benchmark
+    leaderboard_root = benchmark_dir / "leaderboard"
     scenario_runner_root = benchmark_dir / "scenario_runner"
     simulator_dir = _CARLA_LIB_DIR / "simulator" / "0915"
     environment = os.environ.copy()
@@ -64,7 +65,7 @@ def main(cfg: DictConfig) -> None:
             "PYTHONPATH": os.pathsep.join(
                 [
                     str(simulator_dir / "PythonAPI" / "carla"),
-                    str(benchmark_dir),
+                    str(leaderboard_root),
                     str(scenario_runner_root),
                     environment.get("PYTHONPATH", ""),
                 ],
@@ -77,7 +78,7 @@ def main(cfg: DictConfig) -> None:
 
     command = [
         sys.executable,
-        str(benchmark_dir / "leaderboard" / "leaderboard_evaluator.py"),
+        str(leaderboard_root / "leaderboard" / "leaderboard_evaluator.py"),
         "--routes",
         str(Path(benchmark_config.routes_file).absolute()),
         "--agent",

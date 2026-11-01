@@ -6,7 +6,7 @@ requires = [ "setuptools>=68", "wheel" ]
 
 [project]
 name = "py123d-garage"
-version = "0.2.2"
+version = "0.2.3"
 description = "Py123D Garage"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -55,7 +55,7 @@ optional-dependencies.carla = [
   "dictor>=0.1",
   "ephem>=4",
   "py-trees==0.8.3",
-  # The vendored leaderboards read the carla version through pkg_resources, which setuptools 82 removed.
+  # The cloned leaderboards read the carla version through pkg_resources, which setuptools 82 removed.
   "setuptools<82",
   "simple-watchdog-timer>=0.1",
   "tabulate>=0.9",
@@ -114,7 +114,7 @@ constraint-dependencies = [ "pydantic>=2.8" ]
 [tool.ruff]
 line-length = 120
 # Vendored code keeps its upstream shape.
-extend-exclude = [ "lib", "src/py123d_garage/policy/vavam/network" ]
+extend-exclude = [ "lib" ]
 fix = true
 format.quote-style = "double"
 lint.select = [
@@ -157,12 +157,10 @@ lint.isort.known-first-party = [ "py123d_garage" ]
 lint.isort.required-imports = [ "from __future__ import annotations" ]
 
 [tool.codespell]
-ignore-words-list = "statics,deques,ue,nd"
-skip = "*/policy/vavam/network/*"
+ignore-words-list = "statics,deques,ue,nd,nam"
 
 [tool.pydoclint]
 style = "google"
-exclude = ".*/policy/vavam/network/.*"
 arg-type-hints-in-docstring = false
 skip-checking-raises = true
 allow-init-docstring = true
@@ -216,8 +214,10 @@ executionEnvironments = [
     "lib/alpasim/alpasim/src/driver/src",
     "lib/alpasim/alpasim/src/grpc"
   ], reportMissingImports = "hint", reportGeneralTypeIssues = "warning" },
-  # Vendored VaVAM code keeps its upstream shape; standard mode without the strict extras.
-  { root = "src/py123d_garage/policy/vavam/network", extraPaths = [ "src" ], reportImplicitOverride = "none", reportGeneralTypeIssues = "warning", reportArgumentType = "warning", reportAssignmentType = "warning", reportCallIssue = "warning", reportAttributeAccessIssue = "warning", reportOptionalMemberAccess = "warning", reportReturnType = "warning", reportIndexIssue = "warning", reportOperatorIssue = "warning", reportRedeclaration = "warning", reportIncompatibleMethodOverride = "warning", reportPossiblyUnboundVariable = "warning" },
+  # odyssey_bridge lives untyped in the gitignored Odyssey checkout; without it (CI) its imports and @override checks degrade to warnings.
+  { root = "src/py123d_garage/evaluation/odyssey", extraPaths = [ "src", "lib/odyssey/odyssey/OdysseyBenchmark" ], reportMissingImports = "hint", reportGeneralTypeIssues = "warning" },
+  # The agent protocol lives in the gitignored HUGSIM checkout; without it (CI) its import degrades to a hint.
+  { root = "src/py123d_garage/evaluation/hugsim", extraPaths = [ "src", "lib/hugsim/hugsim" ], reportMissingImports = "hint" },
   # Full typing coverage: no Unknown may flow into annotated packages.
   { root = "src/py123d_garage/evaluation", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },
   { root = "src/py123d_garage/policy", extraPaths = [ "src" ], reportUnknownVariableType = "error", reportUnknownMemberType = "error", reportUnknownParameterType = "error", reportUnknownArgumentType = "error", reportMissingParameterType = "error", reportMissingTypeArgument = "error", reportUnnecessaryCast = "error" },

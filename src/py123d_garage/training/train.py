@@ -1016,7 +1016,7 @@ def main(cfg: DictConfig) -> None:
 
         def check_kernels_and_compile_ahead(dataset: TrainingDataset) -> None:
             """
-            Check the kernel patches on a batch of the first source, then start compiling on it.
+            Check the kernel patches on batches spread over the first source, then start compiling on its first batch.
 
             Args:
                 dataset: the first source's dataset
@@ -1024,10 +1024,14 @@ def main(cfg: DictConfig) -> None:
             batch = example_batch(dataset, loaded_batch_size)
             device = connector.strategy.root_device
             if kernel_check_on:
+                num_batches = training_config.kernel_check_num_batches
                 with log_stage("Checking the kernel patches against the plain torch policy"):
                     lightning_module.to(device)
                     lightning_module.verify_kernel_patches(
-                        batch.to(device),
+                        [
+                            example_batch(dataset, loaded_batch_size, index * len(dataset) // num_batches)
+                            for index in range(num_batches)
+                        ],
                         connector.precision_plugin.train_step_context,
                         output_dir / "kernel_report.json" if ranks.global_rank == 0 else None,
                     )

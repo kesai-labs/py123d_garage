@@ -6,17 +6,6 @@
 #include <torch/library.h>
 
 TORCH_LIBRARY_FRAGMENT(py123d_garage_cuda, m) {
-  // Each pass on a pinned engine: a cuDNN engine's global index (-1: its first heuristic choice) with [type, value,
-  // ...] knobs, or -2 for the halo kernel.
-  m.def(
-      "pinned_conv(Tensor x, Tensor weight, int[] stride, int[] padding, int[] engines, int[] forward_knobs, "
-      "int[] data_knobs, int[] weight_knobs) -> Tensor");
-  m.def(
-      "pinned_conv_data_grad(Tensor grad, Tensor weight, int[] input_size, int[] stride, int[] padding, int engine, "
-      "int[] knobs) -> Tensor");
-  m.def(
-      "pinned_conv_weight_grad(Tensor grad, Tensor x, int[] weight_size, int[] stride, int[] padding, int engine, "
-      "int[] knobs) -> Tensor");
   // Draws its dropout mask from the CUDA generator and returns the (seed, offset) the backward redraws it from.
   m.def("planner_swiglu_linear(Tensor x, Tensor weight, Tensor bias, float dropout_p) -> (Tensor, Tensor, Tensor)",
         {at::Tag::nondeterministic_seeded});

@@ -102,10 +102,10 @@ def test_cross_key_interpolation_in_yaml_is_rejected(config_dir: Path) -> None:
 
 def test_hydra_target_key_names_the_policy(config_dir: Path) -> None:
     (config_dir / "training" / "targeted.yaml").write_text(
-        "# @package _global_\npolicy_config:\n  _target_: py123d_garage.policy.vavam.vavam_policy.VavamPolicy\n",
+        "# @package _global_\npolicy_config:\n  _target_: my_package.my_policy.MyPolicy\n",
     )
     config = load_config(TrainingConfig, "train", args=[_user_dir(config_dir), "training=targeted"])
-    assert config.policy_config.target == "py123d_garage.policy.vavam.vavam_policy:VavamPolicy"
+    assert config.policy_config.target == "my_package.my_policy:MyPolicy"
 
 
 def test_env_overrides_sit_below_the_command_line(monkeypatch: pytest.MonkeyPatch) -> None:

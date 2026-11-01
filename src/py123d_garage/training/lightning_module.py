@@ -231,22 +231,24 @@ class PolicyLightningModule(L.LightningModule):
 
     def verify_kernel_patches(
         self,
-        batch: TrainingSample,
+        batches: Sequence[TrainingSample],
         train_step_context: Callable[[], AbstractContextManager[None]],
         report_file: Path | None,
     ) -> None:
         """
-        Check policy 0's kernel patches against the plain torch policy on seed 0's rows of a loaded batch, and write
+        Check policy 0's kernel patches against the plain torch policy on seed 0's rows of loaded batches, and write
         the kernel report; see kernel_verification.verify_kernel_patches.
 
         Args:
-            batch: a loaded batch on the policies' device
+            batches: the loaded batches, on the CPU
             train_step_context: the trainer's context around a training step, e.g. its autocast
             report_file: where the kernel report goes; None writes none
         """
-        device = batch.source_indices.device
-        with torch.random.fork_rng(devices=[device]):  # pyright: ignore[reportUnknownMemberType]
-            inputs = self._seed_inputs(self._augmented(batch))[0]
+        device = next(self.policy.parameters()).device
+        inputs: list[SeedInputs] = []
+        for batch in batches:
+            with torch.random.fork_rng(devices=[device]):  # pyright: ignore[reportUnknownMemberType]
+                inputs.append(self._seed_inputs(self._augmented(batch.to(device)))[0])
         verify_kernel_patches(
             self.policy,
             self.training_config,

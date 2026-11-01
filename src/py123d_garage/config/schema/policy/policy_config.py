@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from omegaconf import MISSING
 
 from py123d_garage.config.schema.policy.transfuser_config import TransfuserConfig
-from py123d_garage.config.schema.policy.vavam_config import VavamConfig
 
 
 @dataclass
@@ -19,9 +18,6 @@ class PolicyConfig:
 
     # TransFuser's block, read when target names the TransfuserPolicy.
     transfuser_config: TransfuserConfig | None = None
-
-    # VaVAM's block, read when target names the VavamPolicy.
-    vavam_config: VavamConfig | None = None
 
     # -- Atomic settings --
 
