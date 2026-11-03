@@ -32,7 +32,7 @@ The policy baselines build on [LEAD TransFuser v6](https://github.com/kesai-labs
 
 ## Benchmarks
 
-The closed-loop and open-loop evaluations build on [AlpaSim](https://github.com/NVlabs/alpasim), [CARLA](https://carla.org), [NAVSIM](https://github.com/autonomousvision/navsim) v1 and v2, [HUGSIM](https://github.com/hyzhou404/HUGSIM) and [Odyssey](https://github.com/SNU-ADR/Odyssey); the AlpaSim nuPlan track renders its scenes with [World Engine](https://arxiv.org/abs/2606.19836), and HUGSIM runs through valeo.ai's fork [HUGSIM_garage](https://github.com/valeoai/HUGSIM_garage). If you report their scores, please also cite:
+The closed-loop and open-loop evaluations build on [AlpaSim](https://github.com/NVlabs/alpasim), [CARLA](https://carla.org), [NAVSIM](https://github.com/autonomousvision/navsim) v1 and v2, [HUGSIM](https://github.com/hyzhou404/HUGSIM), [Odyssey](https://github.com/SNU-ADR/Odyssey) and [NavSafe-∞](https://github.com/VAIL-UCLA/NavSafe-infty); the AlpaSim nuPlan track renders its scenes with [World Engine](https://arxiv.org/abs/2606.19836), and HUGSIM runs through valeo.ai's fork [HUGSIM_garage](https://github.com/valeoai/HUGSIM_garage). If you report their scores, please also cite:
 
 ```bibtex
 @software{alpasim2025,
@@ -75,6 +75,13 @@ The closed-loop and open-loop evaluations build on [AlpaSim](https://github.com/
   title={Odyssey: A Closed-Loop Benchmark for Long-Horizon Real-World Driving with Explicit Navigation Routes},
   author={Kim, Jungho and Shin, Hongjae and Yu, Seunghoon and Yoo, Heecheol and Kim, Myeongjun and Oh, Jiyong and Kwak, Donghyuk and Nam, Seunghyeop and Oh, Haesung and Kim, Hyunju and Cho, Hyungchan and Park, Jaehyun and Seo, Soo Won and Choi, Jun Won},
   journal={arXiv preprint arXiv:2610.06469},
+  year={2026}
+}
+
+@article{bao2026navsafe,
+  title={{NavSafe-$\infty$: Benchmarking Closed-Loop Driving Safety in Photorealistic Environments}},
+  author={Bao, Yuxin and Ruan, Hongwei and Wang, Luobin and Zhao, Seth Z. and Leng, Ziyang and Zhang, Zihan and Zeng, Yu and McAllister, Rowan and Christensen, Henrik and Zhou, Bolei},
+  journal={arXiv preprint arXiv:2609.26618},
   year={2026}
 }
 

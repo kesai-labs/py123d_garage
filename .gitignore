@@ -62,6 +62,11 @@ lib/odyssey/runtime
 lib/hugsim/hugsim
 lib/hugsim/runtime
 
+# NavSafe
+lib/navsafe/navsafe
+lib/navsafe/runtime
+lib/navsafe/plugin/*.egg-info
+
 # runs and data links
 outputs
 /data
